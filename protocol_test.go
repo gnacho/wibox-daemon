@@ -51,7 +51,7 @@ func TestBuildEnvelopeIncludesSession(t *testing.T) {
 }
 
 // Fixture real del gateway: respuesta de login capturada el 4-nov-2026.
-const loginResponse = `<?xml version="1.0" encoding="UTF-8"?><envelope><header><flag>tdkcloud</flag><version>v1.24</version><command>login</command><seq>1</seq><session><id>cHRpZD0wMGI4ODU4OGU2JmFjaWQ9MDAwMDFmMmEzMiZYeE00cnpzWnZteThjWmFDMEpKZkRvYzdnMTAyODBF</id><timeout>0</timeout></session><result>0</result></header><content><account-id>2042418</account-id><nick>OX00000000001f2a32003-2021-87dad215f30f1f7e</nick><expire>0</expire><token></token><is-guest>0</is-guest><mfa-status>0</mfa-status><mfa-ttl>0</mfa-ttl></content></envelope>`
+const loginResponse = `<?xml version="1.0" encoding="UTF-8"?><envelope><header><flag>tdkcloud</flag><version>v1.24</version><command>login</command><seq>1</seq><session><id>c2Vzc2lvbi1kZS1wdWViYS1uby12YWxpZGEtZW4tZWwtZ2F0ZXdheS1yZWFs</id><timeout>0</timeout></session><result>0</result></header><content><account-id>1000001</account-id><nick>OX0000000000000000000-2021-0000000000000000</nick><expire>0</expire><token></token><is-guest>0</is-guest><mfa-status>0</mfa-status><mfa-ttl>0</mfa-ttl></content></envelope>`
 
 func TestParseLoginResponse(t *testing.T) {
 	resp, err := parseResponse([]byte(loginResponse))
@@ -67,7 +67,7 @@ func TestParseLoginResponse(t *testing.T) {
 	if resp.Session == "" {
 		t.Fatal("sin sesion")
 	}
-	if resp.Content["account-id"] != "2042418" {
+	if resp.Content["account-id"] != "1000001" {
 		t.Fatalf("account-id=%q", resp.Content["account-id"])
 	}
 }
