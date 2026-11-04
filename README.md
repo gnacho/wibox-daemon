@@ -152,3 +152,7 @@ code).
 
 - [wibox-android](https://github.com/gnacho/wibox-android): Android app (Kotlin)
   for the same ecosystem. The protocol notes live in its `docs/protocol.md`.
+
+## License
+
+GNU Affero General Public License v3.0. See [LICENSE](LICENSE).
