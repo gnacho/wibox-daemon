@@ -99,6 +99,12 @@ curl -H "Authorization: Bearer $WIBOX_API_TOKEN" \
      "http://192.168.1.50:8087/open?device=23123csfewyk"
 ```
 
+## Verificar la apertura en el edificio
+
+`docs/verificacion-edificio.md` es el guion para la visita: descubrir el timbre,
+comprobar el cloud, abrir la puerta y leer los errores. La apertura real solo se
+puede probar en la misma red que el timbre.
+
 ## Despliegue
 
 Ver `deploy/wibox-daemon.service` (systemd) y `deploy/haos-wibox.yaml` (Home
