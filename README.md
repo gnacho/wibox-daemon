@@ -151,6 +151,39 @@ Then add it to Home Assistant as a generic camera pointing at
   into the same stream needs a second `ffmpeg` source in go2rtc rather than the
   `exec:` pipe.
 
+## Home Assistant add-on
+
+Home Assistant OS cannot run a bare binary, so the daemon also ships as an
+add-on. It runs inside HAOS, talks to the vendor cloud and exposes the HTTP API
+on port 8087, which means the door can be opened from Home Assistant without the
+phone and without being on the building network.
+
+```
+Settings -> Add-ons -> Add-on store -> Repositories
+   add https://github.com/gnacho/wibox-daemon
+install "Wibox Doorbell"
+```
+
+Options: account, password, client id, device id, opening pin, API token,
+p2pconnect attempts, awake poll and video wait. The add-on forces the remote
+chain, so no LAN address is configured.
+
+From Home Assistant:
+
+```yaml
+rest_command:
+  wibox_open:
+    url: "http://homeassistant.local:8087/open"
+    method: GET
+    headers:
+      Authorization: "Bearer <api_token>"
+    timeout: 120
+```
+
+The timeout has to be generous: if the doorbell is asleep the daemon keeps
+retrying until it gets a peer, and only then opens. `WIBOX_REMOTE_ATTEMPTS` and
+the `attempts` option bound that wait.
+
 ## Verifying the door opening in the building
 
 `docs/building-verification.md` is the script for the visit: discover the
