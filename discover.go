@@ -57,6 +57,32 @@ func localHosts(port int) []string {
 	return out
 }
 
+// localIPv4s devuelve las IPv4 propias activas que no son loopback.
+func localIPv4s() []string {
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return nil
+	}
+	var out []string
+	for _, ifi := range ifaces {
+		if ifi.Flags&net.FlagUp == 0 || ifi.Flags&net.FlagLoopback != 0 {
+			continue
+		}
+		addrs, err := ifi.Addrs()
+		if err != nil {
+			continue
+		}
+		for _, a := range addrs {
+			if ipnet, ok := a.(*net.IPNet); ok {
+				if ip4 := ipnet.IP.To4(); ip4 != nil {
+					out = append(out, ip4.String())
+				}
+			}
+		}
+	}
+	return out
+}
+
 // probeHosts prueba el setup QUII en paralelo y devuelve las direcciones que
 // responden como un timbre.
 func probeHosts(hosts []string, timeout time.Duration, workers int) []string {

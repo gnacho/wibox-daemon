@@ -201,11 +201,46 @@ func (d *daemon) routes() http.Handler {
 func main() {
 	check := flag.Bool("check", false, "prueba login, lista de dispositivos y token contra el cloud y sale")
 	discover := flag.Bool("discover", false, "escanea la red local en busca del timbre y sale")
+	ust := flag.Bool("ust", false, "recorre la cadena remota hasta los candidatos de p2pconnect y sale")
+	remote := flag.Bool("remote", false, "abre la puerta por la cadena remota propia, sin movil ni SDK")
 	flag.Parse()
 
 	cfg := loadConfig()
 	clientID = cfg.clientID
 	d := &daemon{cfg: cfg, auth: NewUserAuth(cfg.baseURL, cfg.clientID)}
+
+	if *ust {
+		if cfg.deviceID == "" {
+			log.Fatal("falta WIBOX_DEVICE_ID")
+		}
+		if err := d.login(); err != nil {
+			log.Fatalf("login: %v", err)
+		}
+		if err := probeRemote(cfg, d.auth.session); err != nil {
+			log.Fatalf("ust: %v", err)
+		}
+		return
+	}
+
+	if *remote {
+		if cfg.deviceID == "" {
+			log.Fatal("falta WIBOX_DEVICE_ID")
+		}
+		if err := d.login(); err != nil {
+			log.Fatalf("login: %v", err)
+		}
+		tok, err := d.auth.DeviceToken(cfg.deviceID)
+		if err != nil {
+			log.Fatalf("token: %v", err)
+		}
+		key := []byte(tok.DataEncodeKey)
+		rc, err := remoteOpen(cfg, d.auth.session, key, encodeDevicePassword(tok.AuthCode))
+		if err != nil {
+			log.Fatalf("remote: rc=%d err=%v", rc, err)
+		}
+		fmt.Printf("apertura remota ok rc=%d\n", rc)
+		return
+	}
 
 	if *discover {
 		log.Printf("escaneando el puerto %d en las redes locales...", cfg.lanPort)

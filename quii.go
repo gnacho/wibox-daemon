@@ -5,6 +5,7 @@ import (
 	"crypto/cipher"
 	"crypto/sha256"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -122,11 +123,18 @@ func (c *QuiiClient) CloseNow() error {
 	return c.conn.Close()
 }
 
+// buildQuiiSetup devuelve el setup de 32 bytes que abre el canal QUII
+// (0xA9 delante, resto ceros).
+func buildQuiiSetup() []byte {
+	setup := make([]byte, 32)
+	setup[0] = 0xA9
+	return setup
+}
+
 // quiiHandshake manda el setup en claro de 32 bytes y valida la respuesta.
 func quiiHandshake(conn net.Conn, timeout time.Duration) error {
 	conn.SetDeadline(time.Now().Add(timeout))
-	setup := make([]byte, 32)
-	setup[0] = 0xA9
+	setup := buildQuiiSetup()
 	if _, err := conn.Write(setup); err != nil {
 		return err
 	}
@@ -257,6 +265,64 @@ func min(a, b int) int {
 		return a
 	}
 	return b
+}
+
+var errShortPacket = errors.New("paquete QUII incompleto")
+
+// decodeQuiiPacket parsea un paquete QUII que llega por un flujo de bytes, como
+// el que entrega el tunel remoto, y dice cuantos bytes consumio. readPacket hace
+// lo mismo pero leyendo de un socket.
+func decodeQuiiPacket(key, data []byte) (*packet, int, error) {
+	if len(data) < 32 {
+		return nil, 0, errShortPacket
+	}
+	clear, err := aesCBC(key, data[:32], false)
+	if err != nil {
+		return nil, 0, err
+	}
+	p := &packet{Type: clear[0], B13: clear[13], B14: clear[14]}
+	cmdSize := int(binary.LittleEndian.Uint16(clear[9:]))
+	rawSize := int(binary.LittleEndian.Uint16(clear[11:]))
+	mediaSize := int(binary.LittleEndian.Uint32(clear[11:]))
+
+	isMedia := p.Type >= 0xA0 && p.Type <= 0xA3
+	size := cmdSize
+	if isMedia {
+		size = mediaSize
+	}
+	if size < 0 || size > 5*1024*1024 {
+		return nil, 0, fmt.Errorf("tamano de paquete invalido: %d", size)
+	}
+	if len(data) < 32+size {
+		return nil, 0, errShortPacket
+	}
+	body := data[32 : 32+size]
+	total := 32 + size
+
+	if isMedia {
+		prefix := cmdSize
+		if prefix > len(body) {
+			prefix = len(body)
+		}
+		if prefix > 0 && prefix%16 == 0 {
+			if dec, derr := aesCBC(key, body[:prefix], false); derr == nil {
+				p.Command = dec[:min(rawSize, len(dec))]
+			}
+		}
+		p.Media = body[prefix:]
+		return p, total, nil
+	}
+	dec, err := aesCBC(key, body, false)
+	if err != nil {
+		return nil, 0, err
+	}
+	if rawSize > 0 && rawSize <= len(dec) {
+		p.Command = dec[:rawSize]
+	} else {
+		p.Command = dec
+	}
+	p.RawSize = rawSize
+	return p, total, nil
 }
 
 // sendTransparent envia una orden del canal transparente y espera su respuesta.
