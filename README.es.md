@@ -147,6 +147,39 @@ Despues se anade a Home Assistant como camara generica apuntando a
   meterlo en el mismo flujo requiere una segunda fuente `ffmpeg` en go2rtc y no
   el pipe de `exec:`.
 
+## Add-on de Home Assistant
+
+Home Assistant OS no puede ejecutar un binario suelto, asi que el daemon tambien
+se distribuye como add-on. Corre dentro de HAOS, habla con el cloud del
+fabricante y expone la API HTTP en el puerto 8087, o sea que la puerta se abre
+desde Home Assistant sin el movil y sin estar en la red del edificio.
+
+```
+Ajustes -> Add-ons -> Tienda de add-ons -> Repositorios
+   anadir https://github.com/gnacho/wibox-daemon
+instalar "Wibox Doorbell"
+```
+
+Opciones: cuenta, contrasena, client id, id del dispositivo, pin de apertura,
+token de la API, intentos de p2pconnect, espera entre sondeos y espera de video.
+El add-on fuerza la cadena remota, asi que no se configura direccion local.
+
+Desde Home Assistant:
+
+```yaml
+rest_command:
+  wibox_open:
+    url: "http://homeassistant.local:8087/open"
+    method: GET
+    headers:
+      Authorization: "Bearer <api_token>"
+    timeout: 120
+```
+
+El timeout tiene que ser generoso: si el timbre duerme, el daemon reintenta hasta
+conseguir un peer y solo entonces abre. `WIBOX_REMOTE_ATTEMPTS` y la opcion
+`attempts` acotan esa espera.
+
 ## Verificar la apertura en el edificio
 
 `docs/building-verification.md` es el guion para la visita: descubrir el timbre,
