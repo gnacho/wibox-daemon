@@ -16,18 +16,26 @@ at hand.
 - Device list of the account.
 - Device token (64-character auth-code and 32-byte encryption key).
 - Door opening over QUII on TCP against the doorbell on the local network.
+- **Door opening remotely, in pure Go**: `query-hlrv2` discovery, UST MQTT
+  broker, `p2pconnect`, UDP NAT hole punching probe, RB-UDP tunnel and QUII
+  inside the tunnel. No manufacturer SDK (which only ships for arm64) and no
+  phone involved.
+- Remote H.264 Annex-B video on stdout, so go2rtc can hand it to Home
+  Assistant. Optional G.711A audio on stderr.
 - Doorbell discovery on the local network (`-discover`): scans the QUII port
   in the machine's /24s and runs the setup against every candidate.
 - Token-protected HTTP API: `/health`, `/devices`, `/open`.
 
 ## What it does NOT do
 
-- **It does not open the door remotely.** The manufacturer's remote path goes
-  through a P2P tunnel implemented by its proprietary SDK, which only ships
-  compiled for arm64 (`libqv-p2p-v2.so`). Without that binary there is no
-  tunnel. The daemon therefore works when it is on the same network as the
-  doorbell.
-- It does not send video or audio. It only opens the door and queries state.
+- It does not serve RTSP and does not transcode: video comes out as raw H.264
+  Annex-B and go2rtc does the packaging.
+- It is not an NVR and does not keep the door open: every `-video` is one
+  session.
+- The doorbell runs on batteries and sleeps. It wakes on physical activity or
+  when the official app is used, and the window is about 30 seconds. While it
+  sleeps, `p2pconnect` returns `aoffline` and the daemon retries until
+  `WIBOX_REMOTE_ATTEMPTS` is exhausted.
 
 ## Build
 
@@ -51,14 +59,23 @@ Everything through environment variables (or a systemd `EnvironmentFile`):
 | `WIBOX_PASSWORD` | Password of that account |
 | `WIBOX_CLIENT_ID` | App client identifier (defaults to `003-2021-87dad215f30f1f7e`) |
 | `WIBOX_DEVICE_ID` | Doorbell UDID (when unset, the one passed in `/open` is used) |
-| `WIBOX_UNLOCK_PASSWORD` | Opening PIN (defaults to `0925`) |
+| `WIBOX_UNLOCK_PASSWORD` | Opening PIN (no default, set it in the config file) |
 | `WIBOX_LAN_ADDR` | `ip:port` of the doorbell on the local network (stream port, 34567 by default) |
 | `WIBOX_LAN_PORT` | Port scanned by `-discover` (defaults to `34567`) |
 | `WIBOX_API_TOKEN` | HTTP API token. Empty = no authentication |
 | `WIBOX_API_PORT` | API port (defaults to `8087`) |
 | `WIBOX_CHANNEL` / `WIBOX_STREAM` | QUII channel and stream (defaults to `1` and `1`) |
 | `WIBOX_BASE_URL` | Manufacturer cloud |
-| `WIBOX_DEBUG` | Any value enables HTTP traces |
+| `WIBOX_REMOTE` | `0` disables the remote path (enabled by default) |
+| `WIBOX_REMOTE_ONLY` | `1` skips the local path even when `WIBOX_LAN_ADDR` is set |
+| `WIBOX_REMOTE_ATTEMPTS` | `p2pconnect` attempts (defaults to `20`, 12 s each) |
+| `WIBOX_AWAKE_POLL` | Seconds between probes while the doorbell sleeps (defaults to `3`) |
+| `WIBOX_VIDEO_WAIT` | Seconds without frames before cutting the video (defaults to `20`) |
+| `WIBOX_DEBUG` | Any value enables HTTP and MQTT traces |
+
+A configuration file can also be passed with `-config <file>`. That is how
+go2rtc launches it, since a child process does not inherit the systemd
+environment:
 
 ## Discovering the doorbell on the local network
 
@@ -102,6 +119,37 @@ curl -H "Authorization: Bearer $WIBOX_API_TOKEN" http://192.168.1.50:8087/device
 curl -H "Authorization: Bearer $WIBOX_API_TOKEN" \
      "http://192.168.1.50:8087/open?device=23123csfewyk"
 ```
+
+## Video in Home Assistant
+
+The daemon does not implement RTSP. It writes raw H.264 Annex-B to stdout and
+lets [go2rtc](https://github.com/AlexxIT/go2rtc) do the packaging, which is
+already the streaming engine inside Home Assistant (2024.11 and later).
+
+`exec:` with the `pipe` transport reads exactly that: a raw H.264/H.265
+bitstream on stdout.
+
+```yaml
+# deploy/go2rtc.yaml
+streams:
+  wibox: exec:/usr/local/bin/wibox-daemon -config /etc/wibox-daemon.conf -video#killsignal=2#killtimeout=5
+
+api:
+  listen: "127.0.0.1:1984"
+rtsp:
+  listen: "127.0.0.1:8554"
+```
+
+Then add it to Home Assistant as a generic camera pointing at
+`rtsp://127.0.0.1:8554/wibox`, or as a go2rtc stream for WebRTC. Two caveats:
+
+- Every `-video` run is one session against the doorbell. With the doorbell
+  asleep, the process spends its time in the `p2pconnect` retry loop, so it is
+  better to open the stream on demand (a dashboard tap) than to leave it
+  always-on.
+- Audio is G.711A (PCMA) and `-video-audio` writes it to stderr, so getting it
+  into the same stream needs a second `ffmpeg` source in go2rtc rather than the
+  `exec:` pipe.
 
 ## Verifying the door opening in the building
 

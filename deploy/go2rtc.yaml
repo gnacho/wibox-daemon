@@ -1,0 +1,15 @@
+# go2rtc: puente entre el daemon y Home Assistant.
+# El daemon escribe H264 Annex-B por stdout y go2rtc lo reempaqueta a RTSP,
+# WebRTC o HLS sin transcodificar (el timbre ya manda H264).
+#
+# Copia esto en el go2rtc.yaml de tu instalacion y ajusta la ruta del binario
+# y del fichero de configuracion.
+
+streams:
+  wibox: exec:/usr/local/bin/wibox-daemon -config /etc/wibox-daemon.conf -video#killsignal=2#killtimeout=5
+
+# Solo escucha en local: HA corre en la misma maquina.
+api:
+  listen: "127.0.0.1:1984"
+rtsp:
+  listen: "127.0.0.1:8554"

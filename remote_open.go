@@ -32,6 +32,9 @@ func waitQuiiSetup(in <-chan []byte, timeout time.Duration) ([]byte, error) {
 // timbre y la misma orden QUII que por LAN. No depende del movil ni del SDK
 // del fabricante.
 func remoteOpen(cfg config, session string, key []byte, password string) (int, error) {
+	if cfg.pin == "" {
+		return -1, fmt.Errorf("falta WIBOX_UNLOCK_PASSWORD: el pin es obligatorio para abrir")
+	}
 	if len(key) != 32 {
 		return -1, fmt.Errorf("data-encode-key de %d bytes, se esperaban 32", len(key))
 	}

@@ -23,6 +23,9 @@ func zeroPad(b []byte) []byte {
 }
 
 func aesCBC(key, plain []byte, encrypt bool) ([]byte, error) {
+	if len(plain) == 0 || len(plain)%16 != 0 {
+		return nil, fmt.Errorf("bloque de %d bytes, no es multiplo de 16", len(plain))
+	}
 	block, err := aes.NewCipher(key)
 	if err != nil {
 		return nil, err
@@ -215,6 +218,12 @@ func (c *QuiiClient) readPacket(deadline time.Time) (*packet, error) {
 		return nil, err
 	}
 	p := &packet{Type: clear[0], B13: clear[13], B14: clear[14]}
+	// Una cabecera descifrada de un flujo desincronizado da bytes aleatorios y
+	// a veces un tamano creible. Validar el tipo evita consumir basura como si
+	// fuera un paquete.
+	if !plausibleQuiiType(p.Type) {
+		return nil, fmt.Errorf("tipo de paquete QUII desconocido: 0x%02x", p.Type)
+	}
 	cmdSize := int(binary.LittleEndian.Uint16(clear[9:]))
 	rawSize := int(binary.LittleEndian.Uint16(clear[11:]))
 	mediaSize := int(binary.LittleEndian.Uint32(clear[11:]))
@@ -272,6 +281,18 @@ var errShortPacket = errors.New("paquete QUII incompleto")
 // decodeQuiiPacket parsea un paquete QUII que llega por un flujo de bytes, como
 // el que entrega el tunel remoto, y dice cuantos bytes consumio. readPacket hace
 // lo mismo pero leyendo de un socket.
+// plausibleQuiiType son los tipos que el timbre manda de verdad: keepalive,
+// play, setup, media y ordenes transparentes.
+func plausibleQuiiType(t byte) bool {
+	switch {
+	case t == 0x00, t == 0x01, t == 0xA9, t == 0xFE:
+		return true
+	case t >= 0xA0 && t <= 0xA3:
+		return true
+	}
+	return false
+}
+
 func decodeQuiiPacket(key, data []byte) (*packet, int, error) {
 	if len(data) < 32 {
 		return nil, 0, errShortPacket
@@ -281,6 +302,12 @@ func decodeQuiiPacket(key, data []byte) (*packet, int, error) {
 		return nil, 0, err
 	}
 	p := &packet{Type: clear[0], B13: clear[13], B14: clear[14]}
+	// Una cabecera descifrada de un flujo desincronizado da bytes aleatorios y
+	// a veces un tamano creible. Validar el tipo evita consumir basura como si
+	// fuera un paquete.
+	if !plausibleQuiiType(p.Type) {
+		return nil, 0, fmt.Errorf("tipo de paquete QUII desconocido: 0x%02x", p.Type)
+	}
 	cmdSize := int(binary.LittleEndian.Uint16(clear[9:]))
 	rawSize := int(binary.LittleEndian.Uint16(clear[11:]))
 	mediaSize := int(binary.LittleEndian.Uint32(clear[11:]))
@@ -311,6 +338,11 @@ func decodeQuiiPacket(key, data []byte) (*packet, int, error) {
 		}
 		p.Media = body[prefix:]
 		return p, total, nil
+	}
+	// Un cuerpo cifrado siempre es multiplo de 16: si no lo es, la cabecera
+	// era basura de un flujo desincronizado, no un paquete.
+	if size%16 != 0 {
+		return nil, 0, fmt.Errorf("cuerpo de %d bytes no alineado a 16", size)
 	}
 	dec, err := aesCBC(key, body, false)
 	if err != nil {

@@ -80,11 +80,15 @@ func (info *p2pConnectInfo) hasProbeTargets() bool {
 }
 
 type ustMqttConfig struct {
-	BrokerURL  string
-	ClientID   string
-	DeviceID   string
-	Session    string
-	Attempts   int
+	BrokerURL string
+	ClientID  string
+	DeviceID  string
+	Session   string
+	Attempts  int
+	// AwakePoll es la espera entre sondeos cuando el timbre esta dormido. Un
+	// portal comunitario pasa horas sin actividad, asi que un vigilante largo
+	// necesita un intervalo amplio para no saturar el broker.
+	AwakePoll  time.Duration
 	ForceTrans int
 }
 
@@ -115,6 +119,9 @@ func newUserdata() string {
 func newUstMqtt(cfg ustMqttConfig) *ustMqtt {
 	if cfg.Attempts <= 0 {
 		cfg.Attempts = 20
+	}
+	if cfg.AwakePoll <= 0 {
+		cfg.AwakePoll = 3 * time.Second
 	}
 	if cfg.Session == "" {
 		cfg.Session = ""
@@ -460,12 +467,73 @@ func p2pConnectInfoFrom(content map[string]interface{}) *p2pConnectInfo {
 	return info
 }
 
-func (m *ustMqtt) waitP2PConnectResponse(sessionFlag string, timeout time.Duration) *p2pConnectInfo {
+// deviceAsleep lee el estado que publica el servidor en sub-device-state. Cuando
+// el timbre esta en aoffline no va a responder al p2pconnect, asi que no tiene
+// sentido esperar el timeout entero.
+func (m *ustMqtt) deviceAsleep(obj map[string]interface{}) bool {
+	content, ok := obj["content"].(map[string]interface{})
+	if !ok {
+		return false
+	}
+	state, ok := content["state-s"].(map[string]interface{})
+	if !ok {
+		return false
+	}
+	for _, id := range jsonStringList(state["aoffline"]) {
+		if id == m.cfg.DeviceID {
+			return true
+		}
+	}
+	return false
+}
+
+// deviceOnline es el complemento de deviceAsleep: el servidor lo lista en
+// aonline cuando el timbre ha despertado y admite p2pconnect.
+func (m *ustMqtt) deviceOnline(obj map[string]interface{}) bool {
+	content, ok := obj["content"].(map[string]interface{})
+	if !ok {
+		return false
+	}
+	state, ok := content["state-s"].(map[string]interface{})
+	if !ok {
+		return false
+	}
+	for _, id := range jsonStringList(state["aonline"]) {
+		if id == m.cfg.DeviceID {
+			return true
+		}
+	}
+	return false
+}
+
+// waitDeviceAwake sondea el estado hasta ver el timbre online. Con el timbre
+// dormido no se manda p2pconnect: la sesion se quedaria abierta en el
+// dispositivo y la app oficial recibe "placa ocupada con otra conversacion".
+func (m *ustMqtt) waitDeviceAwake(timeout time.Duration) bool {
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
 		obj, ok := m.pollMessage(500 * time.Millisecond)
 		if !ok {
 			continue
+		}
+		if jsonCommand(obj) == "sub-device-state" && m.deviceOnline(obj) {
+			return true
+		}
+	}
+	return false
+}
+
+// waitP2PConnectResponse devuelve los candidatos, o asleep=true si el servidor
+// ha dicho que el timbre esta dormido (para reintentar sin agotar el timeout).
+func (m *ustMqtt) waitP2PConnectResponse(sessionFlag string, timeout time.Duration) (*p2pConnectInfo, bool) {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		obj, ok := m.pollMessage(500 * time.Millisecond)
+		if !ok {
+			continue
+		}
+		if jsonCommand(obj) == "sub-device-state" && m.deviceAsleep(obj) {
+			return nil, true
 		}
 		content, ok := obj["content"].(map[string]interface{})
 		if !ok {
@@ -487,9 +555,9 @@ func (m *ustMqtt) waitP2PConnectResponse(sessionFlag string, timeout time.Durati
 			}
 			continue
 		}
-		return info
+		return info, false
 	}
-	return nil
+	return nil, false
 }
 
 // buildSessionFlag arma el flag de 64 caracteres: letras al azar, el device id sin
@@ -557,7 +625,23 @@ func (m *ustMqtt) connectAndP2PConnect(localIPs []string, localUDPPort int, publ
 	requestSessionID := int64(rand.Uint32())
 
 	var info *p2pConnectInfo
+	asleep := false
 	for attempt := 1; attempt <= m.cfg.Attempts; attempt++ {
+		if asleep {
+			// Solo se le pide despertar. El p2pconnect se reserva para cuando
+			// el servidor lo da por online, para no dejar la sesion abierta.
+			if err := m.publish("sub-device-state", ustSubDeviceState{DevID: []string{m.cfg.DeviceID}}); err != nil {
+				return nil, "", err
+			}
+			if err := m.publish("device-awaken", ustAwaken{DevID: m.cfg.DeviceID}); err != nil {
+				return nil, "", err
+			}
+			if m.waitDeviceAwake(m.cfg.AwakePoll) {
+				asleep = false
+				log.Printf("p2p: timbre disponible, intento %d/%d", attempt, m.cfg.Attempts)
+			}
+			continue
+		}
 		content := ustP2PConnect{
 			DevID:         m.cfg.DeviceID,
 			SessionFlag:   sessionFlag,
@@ -571,9 +655,15 @@ func (m *ustMqtt) connectAndP2PConnect(localIPs []string, localUDPPort int, publ
 		if err := m.publish("p2pconnect", content); err != nil {
 			return nil, "", err
 		}
-		if r := m.waitP2PConnectResponse(sessionFlag, 12*time.Second); r != nil {
+		if r, wasAsleep := m.waitP2PConnectResponse(sessionFlag, 12*time.Second); r != nil {
 			info = r
 			break
+		} else if wasAsleep {
+			asleep = true
+			if attempt == 1 || attempt%20 == 0 || debugOn() {
+				log.Printf("p2p: timbre dormido, intento %d/%d", attempt, m.cfg.Attempts)
+			}
+			continue
 		}
 		// El timbre duerme: se le vuelve a pedir estado y despertar antes de repetir.
 		if err := m.publish("sub-device-state", ustSubDeviceState{DevID: []string{m.cfg.DeviceID}}); err != nil {

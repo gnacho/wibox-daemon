@@ -4,8 +4,35 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"sync"
 	"time"
 )
+
+// El gateway publica en query-hlrv2 un re-maxtime de 240 s: dentro de esa
+// ventana los servicios devueltos siguen valiendo, asi que se cachean y se
+// ahorra un salto HTTP completo en cada apertura.
+const servicesTTL = 240 * time.Second
+
+var (
+	servicesMu  sync.Mutex
+	servicesVal *ustServices
+	servicesAt  time.Time
+)
+
+func cachedUstServices(cfg config) (*ustServices, error) {
+	servicesMu.Lock()
+	defer servicesMu.Unlock()
+	if servicesVal != nil && time.Since(servicesAt) < servicesTTL {
+		return servicesVal, nil
+	}
+	log.Printf("discovery en %s", cfg.baseURL)
+	s, err := queryUstServices(cfg.baseURL, cfg.clientID, ustOEM, ustApp, 15*time.Second)
+	if err != nil {
+		return nil, err
+	}
+	servicesVal, servicesAt = s, time.Now()
+	return s, nil
+}
 
 // remoteSession es la cadena remota ya establecida hasta tener un peer UDP
 // vivo: discovery, broker UST, p2pconnect, natcheck y sonda de handshake.
@@ -37,11 +64,16 @@ func establishRemote(cfg config, session string) (*remoteSession, error) {
 		return nil, fmt.Errorf("falta WIBOX_DEVICE_ID")
 	}
 
-	log.Printf("discovery en %s", cfg.baseURL)
-	services, err := queryUstServices(cfg.baseURL, cfg.clientID, ustOEM, ustApp, 15*time.Second)
+	t0 := time.Now()
+	mark := func(etapa string) {
+		log.Printf("tiempo: %s %d ms", etapa, time.Since(t0).Milliseconds())
+	}
+
+	services, err := cachedUstServices(cfg)
 	if err != nil {
 		return nil, err
 	}
+	mark("discovery")
 	broker := services.mqttURL()
 	log.Printf("broker UST %s", brokerHost(broker))
 	if nat := services.testAddress(); nat != "" {
@@ -61,7 +93,8 @@ func establishRemote(cfg config, session string) (*remoteSession, error) {
 		ClientID:  cfg.clientID,
 		DeviceID:  cfg.deviceID,
 		Session:   session,
-		Attempts:  20,
+		Attempts:  cfg.remoteAttempts,
+		AwakePoll: cfg.remotePoll,
 	})
 	info, sessionFlag, err := m.connectAndP2PConnect(localIPs, localPort, "")
 	if err != nil {
@@ -69,6 +102,7 @@ func establishRemote(cfg config, session string) (*remoteSession, error) {
 		conn.Close()
 		return nil, err
 	}
+	mark("mqtt+p2pconnect")
 
 	s := &remoteSession{
 		conn:        conn,
@@ -80,19 +114,21 @@ func establishRemote(cfg config, session string) (*remoteSession, error) {
 	}
 
 	// Nuestro mapping externo, que el timbre necesita para responder.
-	if mapped := natcheck(conn, sessionFlag, info.ResponseSessionID, services.testAddress()); mapped != nil {
+	if mapped := natcheckPublic(conn, services.testAddress()); mapped != nil {
 		log.Printf("natcheck mapped=%s", mapped)
 		if err := m.publishNetinfo(localIPs, localPort, mapped.IP.String(), mapped.Port); err != nil {
 			log.Printf("update-netinfo tras natcheck: %v", err)
 		}
 	}
 
+	mark("natcheck")
 	probe, err := runProbeWithHandshake(conn, info, sessionFlag, info.ResponseSessionID, localPort, 1500*time.Millisecond, 3)
 	if err != nil {
 		s.close()
 		return nil, err
 	}
 	s.probe = probe
+	mark("sonda")
 
 	// Si el peer no es de red local y no nos ha sondeado el, hay que abrir el
 	// agujero del NAT esperando su sondeo y contestandolo.

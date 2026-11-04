@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"net"
 	"sync"
 	"time"
@@ -67,6 +68,9 @@ type rbTunnel struct {
 	setupProbeSent       bool
 	pendingEstablished   bool
 	quiiPlaySent         bool
+	quiiPlayAcked        bool
+	dumpSamples          int
+	quiiPlayEndLocalID   uint32
 	quiiSetupSent        bool
 	connectSent          bool
 	quiiDestID           uint32
@@ -195,6 +199,10 @@ func (t *rbTunnel) sendOffsetAck(status, remoteDelta uint32, c *rbControl) {
 func (t *rbTunnel) receiveLoop() {
 	defer t.wg.Done()
 	buf := make([]byte, 4096)
+	stats := map[uint32]int{}
+	lastStats := time.Now()
+	totalDatagrams := 0
+	totalBytes := 0
 	for {
 		select {
 		case <-t.stop:
@@ -219,6 +227,16 @@ func (t *rbTunnel) receiveLoop() {
 		}
 		raw := make([]byte, n)
 		copy(raw, buf[:n])
+		totalDatagrams++
+		totalBytes += n
+		if len(raw) >= 0x18 {
+			stats[readU32(raw, 0x14)]++
+		}
+		if debugOn() && time.Since(lastStats) >= 5*time.Second {
+			log.Printf("tunel rx %d datagramas, %d bytes, estados %v", totalDatagrams, totalBytes, stats)
+			stats = map[uint32]int{}
+			lastStats = time.Now()
+		}
 		t.mu.Lock()
 		t.handleDatagram(raw)
 		t.mu.Unlock()
@@ -230,6 +248,20 @@ func (t *rbTunnel) handleDatagram(raw []byte) {
 		return
 	}
 	status := readU32(raw, 0x14)
+	// Volcado de los datagramas que no encajan en ningun tipo conocido: sin
+	// esto solo se ve el contador del estado y no que lleva dentro.
+	if debugOn() && t.dumpSamples < 12 {
+		known := status&0x1000 != 0 || len(raw) == 28 ||
+			status&0xFFFF == 0x0500 || status&0xFFFF == 0x1900
+		if !known {
+			t.dumpSamples++
+			n := len(raw)
+			if n > 48 {
+				n = 48
+			}
+			log.Printf("tunel raw len=%d status=0x%08x first=%x", len(raw), status, raw[:n])
+		}
+	}
 	if len(raw) >= 0x1C && status&0x1000 != 0 {
 		t.handleDataPayload(raw)
 		return
@@ -387,6 +419,9 @@ func (t *rbTunnel) handleWrapped(raw []byte) {
 }
 
 func (t *rbTunnel) dispatchControl(c *rbControl) {
+	if debugOn() {
+		log.Printf("tunel ctrl 0x%08x local=%d remote=%d lane=%d/%d", c.StatusWord, c.LocalID, c.RemoteID, t.laneLocalID, t.laneRemoteID)
+	}
 	if c.StatusWord == ctrlSynAck && c.RemoteID != 0 {
 		t.laneWord4 = c.Word8
 		t.laneWord8 = 0x01000000
@@ -401,27 +436,47 @@ func (t *rbTunnel) dispatchControl(c *rbControl) {
 		t.sendOffsetAck(ctrlPostConnectAck, 0x38, c)
 	}
 
-	switch c.StatusWord {
-	case ctrlEstablished:
-		t.handleEstablished(c)
-	case ctrlProgress:
-		t.handleProgress(c)
-	case ctrlPostSetup:
-		t.sendOffsetAck(ctrlPostSetupAck, 0x30, c)
-		t.quiiSetupSent = true
-	case ctrlPostPlay:
-		t.sendOffsetAck(ctrlPostPlayAck, 0x34, c)
-		t.quiiPlaySent = true
-	case ctrlStreamReady:
-		t.sendOffsetAck(ctrlStreamReadyAck, 0x3C, c)
-		t.startPlaySync(c)
-	case ctrlPlaySync:
-		t.handlePlaySync(c)
-	case ctrlPlayLate:
-		t.resendPlayStageAck()
-	default:
-		if c.StatusWord&0xFFFF == 0x0D00 {
-			t.handleHeartbeat(c)
+	// El ack del play no tiene constante propia en el cliente oficial: llega
+	// con status16 0x0900 y el remote-id igual al local-id con el que quedamos
+	// al mandar el play. El cliente que funciono en el movil no le responde
+	// nada y deja que el play sync arranque con el ESTABLISHED siguiente, que
+	// trae los ids del lane ya avanzados. Responder aqui arrancaba el play
+	// sync con ids atrasados y el timbre contestaba PLAY_LATE en bucle.
+	if c.StatusWord&0xFFFF == 0x0900 && t.quiiPlaySent && !t.quiiPlayAcked &&
+		t.quiiPlayEndLocalID > 0 && c.RemoteID == t.quiiPlayEndLocalID && c.LocalID > 1 {
+		t.quiiPlayAcked = true
+		if debugOn() {
+			log.Printf("tunel: ack del play local=%d remote=%d", c.LocalID, c.RemoteID)
+		}
+	} else {
+		switch c.StatusWord {
+		case ctrlEstablished:
+			t.handleEstablished(c)
+		case ctrlProgress:
+			t.handleProgress(c)
+		case ctrlPostSetup:
+			t.sendOffsetAck(ctrlPostSetupAck, 0x30, c)
+			t.quiiSetupSent = true
+		case ctrlPostPlay:
+			t.sendOffsetAck(ctrlPostPlayAck, 0x34, c)
+			t.quiiPlaySent = true
+		case ctrlStreamReady:
+			t.sendOffsetAck(ctrlStreamReadyAck, 0x3C, c)
+			t.startPlaySync(c.LocalID)
+		case ctrlPlaySync:
+			t.handlePlaySync(c)
+		case ctrlPlayLate:
+			// El timbre pide el ack del play sync. Si aun no habia arrancado,
+			// se arranca aqui: sin esto se reenviaria una etapa inventada.
+			if t.playSyncActive {
+				t.resendPlayStageAck()
+			} else {
+				t.startPlaySync(c.LocalID)
+			}
+		default:
+			if c.StatusWord&0xFFFF == 0x0D00 {
+				t.handleHeartbeat(c)
+			}
 		}
 	}
 
@@ -450,7 +505,7 @@ func (t *rbTunnel) handleFlow(c *rbControl) {
 func (t *rbTunnel) handleEstablished(c *rbControl) {
 	if t.quiiPlaySent && c.LocalID > 1 && c.RemoteID > 1 {
 		t.sendControl(ctrlPlayEstablishedAck, t.laneWord4, t.laneWord8, c.RemoteID, c.LocalID)
-		t.startPlaySync(c)
+		t.startPlaySync(c.LocalID)
 		return
 	}
 	if !t.connectSent {
@@ -476,14 +531,13 @@ func (t *rbTunnel) handleProgress(c *rbControl) {
 
 // --- play sync ---
 
-func (t *rbTunnel) startPlaySync(c *rbControl) {
-	if t.playSyncActive {
+func (t *rbTunnel) startPlaySync(base uint32) {
+	if t.playSyncActive || base <= 1 {
 		return
 	}
 	t.playSyncActive = true
-	base := c.LocalID
-	if base <= 1 {
-		base = c.RemoteID
+	if debugOn() {
+		log.Printf("tunel: play sync arrancado local=%d remote=%d", base+playSyncLocalBias, base+playSyncStep)
 	}
 	t.playSyncLocalID = base + playSyncLocalBias
 	t.playSyncRemoteID = base + playSyncStep
@@ -517,11 +571,14 @@ func (t *rbTunnel) playSyncLoop() {
 
 func (t *rbTunnel) handlePlaySync(c *rbControl) {
 	if t.playSyncStage >= len(playSyncStageStatuses) {
-		t.quiiReadyOnce.Do(func() { close(t.quiiReady) })
+		t.markQuiiReady()
 		return
 	}
 	t.sendPlayStageAck(playSyncStageStatuses[t.playSyncStage])
 	t.playSyncStage++
+	if debugOn() {
+		log.Printf("tunel: play sync etapa %d", t.playSyncStage)
+	}
 	switch t.playSyncStage {
 	case 1:
 		t.playSyncRemoteID += stage2RemoteBias
@@ -536,8 +593,15 @@ func (t *rbTunnel) handlePlaySync(c *rbControl) {
 		t.playSyncRemoteID += stage6RemoteBias
 	}
 	if t.playSyncStage >= len(playSyncStageStatuses) {
-		t.quiiReadyOnce.Do(func() { close(t.quiiReady) })
+		t.markQuiiReady()
 	}
+}
+
+func (t *rbTunnel) markQuiiReady() {
+	t.quiiReadyOnce.Do(func() {
+		log.Printf("tunel: quii listo, play sync completo en %d etapas", t.playSyncStage)
+		close(t.quiiReady)
+	})
 }
 
 func (t *rbTunnel) resendPlayStageAck() {
@@ -610,7 +674,9 @@ func (t *rbTunnel) sendQuiiPlay() error {
 		return fmt.Errorf("data-encode-key de %d bytes", len(t.key))
 	}
 	path := fmt.Sprintf("/mode=real&idc=%d&ids=%d&ap=2", t.channel, t.stream)
-	body := buildPlayBody("adminapp2", t.password, path)
+	// El camino remoto del cliente que funciono en el movil usa adminapp; el
+	// adminapp2 es el de la sesion LAN y del CGI.
+	body := buildPlayBody("adminapp", t.password, path)
 	packet, err := encryptPacketAt(t.key, 0x01, body,
 		byte(t.channel&0xFF), byte((t.channel>>8)&0xFF), 1, byte((t.stream-1)&0xFF), 0,
 		uint64(time.Now().Unix()))
@@ -619,6 +685,10 @@ func (t *rbTunnel) sendQuiiPlay() error {
 	}
 	t.sendWrappedData(packet, 1, rbPlayTag)
 	t.quiiPlaySent = true
+	// El ack del timbre trae este id como remote-id, asi que se guarda para
+	// reconocerlo: su status no tiene constante propia.
+	t.quiiPlayEndLocalID = t.laneLocalID
+	t.quiiPlayAcked = false
 	return nil
 }
 
@@ -643,4 +713,22 @@ func allFill(b []byte) bool {
 		}
 	}
 	return true
+}
+
+// sendQuiiKeepalive mantiene viva la sesion QUII dentro del tunel. El cliente
+// oficial lo manda cada 10 s desde que se envia el play, y sin el el timbre no
+// llega a emitir: se queda esperando antes de STREAM_READY.
+func (t *rbTunnel) sendQuiiKeepalive() error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.quiiDestID == 0 {
+		return fmt.Errorf("sin destino KCP todavia")
+	}
+	packet, err := encryptPacketAt(t.key, 0x00, nil, 0, 0, 0, 0, 0, uint64(time.Now().Unix()))
+	if err != nil {
+		return err
+	}
+	t.sendWrappedData(packet, t.quiiNextSeq, rbDataTag)
+	t.quiiNextSeq++
+	return nil
 }

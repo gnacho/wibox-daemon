@@ -16,17 +16,24 @@ telefono a mano.
 - Lista de dispositivos de la cuenta.
 - Token del dispositivo (auth-code de 64 caracteres y clave de cifrado de 32).
 - Apertura de puerta por QUII sobre TCP contra el timbre en la red local.
+- **Apertura de puerta en remoto, en Go puro**: discovery `query-hlrv2`, broker
+  MQTT UST, `p2pconnect`, sonda UDP de agujero NAT, tunel RB-UDP y QUII dentro
+  del tunel. No usa el SDK del fabricante (que solo existe para arm64) ni el
+  movil.
+- Video remoto en H.264 Annex-B por stdout, para que go2rtc lo sirva a Home
+  Assistant. Audio G.711A opcional por stderr.
 - Descubrimiento del timbre en la red local (`-discover`): escanea el puerto
   QUII de las /24 de la maquina y hace el setup contra cada candidato.
 - API HTTP con token: `/health`, `/devices`, `/open`.
 
 ## Que NO hace
 
-- **No abre la puerta en remoto.** El camino remoto del fabricante pasa por un
-  tunel P2P que implementa su SDK propietario, que solo existe compilado para
-  arm64 (`libqv-p2p-v2.so`). Sin ese binario no hay tunel. El daemon funciona
-  por tanto cuando esta en la misma red que el timbre.
-- No manda video ni audio. Solo abre la puerta y consulta estado.
+- No sirve RTSP ni transcodifica: el video sale en H.264 Annex-B crudo y el
+  empaquetado lo pone go2rtc.
+- No es un NVR ni mantiene la puerta abierta: cada `-video` es una sesion.
+- El timbre va a pilas y duerme. Despierta con actividad fisica o usando la app
+  oficial, y la ventana es de unos 30 segundos. Mientras duerme, `p2pconnect`
+  devuelve `aoffline` y el daemon reintenta hasta agotar `WIBOX_REMOTE_ATTEMPTS`.
 
 ## Compilar
 
@@ -50,14 +57,22 @@ Todo por variables de entorno (o un fichero `EnvironmentFile` de systemd):
 | `WIBOX_PASSWORD` | Contrasena de esa cuenta |
 | `WIBOX_CLIENT_ID` | Identificador de cliente de la app (por defecto `003-2021-87dad215f30f1f7e`) |
 | `WIBOX_DEVICE_ID` | UDID del timbre (por defecto el que se use en `/open`) |
-| `WIBOX_UNLOCK_PASSWORD` | Pin de apertura (por defecto `0925`) |
+| `WIBOX_UNLOCK_PASSWORD` | Pin de apertura (sin valor por defecto, se pone en la configuracion) |
 | `WIBOX_LAN_ADDR` | `ip:puerto` del timbre en la red local (puerto de stream, 34567 por defecto) |
 | `WIBOX_LAN_PORT` | Puerto que escanea `-discover` (por defecto `34567`) |
 | `WIBOX_API_TOKEN` | Token de la API HTTP. Vacio = sin autenticacion |
 | `WIBOX_API_PORT` | Puerto de la API (por defecto `8087`) |
 | `WIBOX_CHANNEL` / `WIBOX_STREAM` | Canal y stream de QUII (por defecto `1` y `1`) |
 | `WIBOX_BASE_URL` | Cloud del fabricante |
-| `WIBOX_DEBUG` | Cualquier valor activa trazas HTTP |
+| `WIBOX_REMOTE` | `0` desactiva la via remota (por defecto activada) |
+| `WIBOX_REMOTE_ONLY` | `1` salta la via local aunque haya `WIBOX_LAN_ADDR` |
+| `WIBOX_REMOTE_ATTEMPTS` | Intentos de `p2pconnect` (por defecto `20`, 12 s cada uno) |
+| `WIBOX_AWAKE_POLL` | Segundos entre sondeos con el timbre dormido (por defecto `3`) |
+| `WIBOX_VIDEO_WAIT` | Segundos sin frames antes de cortar el video (por defecto `20`) |
+| `WIBOX_DEBUG` | Cualquier valor activa trazas HTTP y MQTT |
+
+La configuracion tambien se puede pasar con `-config <fichero>`. Asi es como lo
+lanza go2rtc, ya que un proceso hijo no hereda el entorno de systemd:
 
 ## Descubrir el timbre en la red local
 
@@ -100,6 +115,37 @@ curl -H "Authorization: Bearer $WIBOX_API_TOKEN" http://192.168.1.50:8087/device
 curl -H "Authorization: Bearer $WIBOX_API_TOKEN" \
      "http://192.168.1.50:8087/open?device=23123csfewyk"
 ```
+
+## Video en Home Assistant
+
+El daemon no implementa RTSP. Escribe H.264 Annex-B crudo por stdout y deja que
+[go2rtc](https://github.com/AlexxIT/go2rtc) haga el empaquetado, que es ademas el
+motor de streaming que ya trae Home Assistant desde 2024.11.
+
+El transporte `pipe` de la fuente `exec:` lee exactamente eso: un bitstream
+H.264/H.265 crudo por stdout.
+
+```yaml
+# deploy/go2rtc.yaml
+streams:
+  wibox: exec:/usr/local/bin/wibox-daemon -config /etc/wibox-daemon.conf -video#killsignal=2#killtimeout=5
+
+api:
+  listen: "127.0.0.1:1984"
+rtsp:
+  listen: "127.0.0.1:8554"
+```
+
+Despues se anade a Home Assistant como camara generica apuntando a
+`rtsp://127.0.0.1:8554/wibox`, o como stream de go2rtc para WebRTC. Dos avisos:
+
+- Cada `-video` es una sesion contra el timbre. Con el timbre dormido el proceso
+  se pasa el rato en el bucle de reintentos de `p2pconnect`, asi que conviene
+  abrir el stream bajo demanda (un toque en el panel) y no dejarlo siempre
+  encendido.
+- El audio es G.711A (PCMA) y `-video-audio` lo escribe por stderr, asi que
+  meterlo en el mismo flujo requiere una segunda fuente `ffmpeg` en go2rtc y no
+  el pipe de `exec:`.
 
 ## Verificar la apertura en el edificio
 

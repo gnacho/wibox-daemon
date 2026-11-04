@@ -353,24 +353,59 @@ func runActiveHandshake(conn *net.UDPConn, sessionFlag string, timeout time.Dura
 
 // natcheck pregunta al servidor de test UDP cual es nuestro mapping externo y
 // devuelve la direccion publica. Sin esto el timbre no sabe donde responder.
-func natcheck(conn *net.UDPConn, sessionFlag string, responseSessionID int64, natURL string) *net.UDPAddr {
+
+// natcheckQuerySize es el tamano de la consulta de mapeo externo que manda el
+// app oficial. Es mas corta que el frame de sonda y no lleva session-flag.
+const natcheckQuerySize = 0x70
+
+// buildNatcheckQuery arma la consulta de mapeo externo replicando byte a byte
+// la que manda el cliente oficial (capturada el 4-Nov-2026 en la red local).
+func buildNatcheckQuery() []byte {
+	pkt := make([]byte, natcheckQuerySize)
+	putU32(pkt, 0x00, p2pMarker)
+	putU16(pkt, 0x1A, natcheckQuerySize)
+	putU32(pkt, 0x1C, 0xFFFFFFFF)
+	putU32(pkt, 0x20, 0x54)
+	// 0x2D es el flag de "dame mi mapeo": con 0 el servidor solo hace eco y no
+	// rellena la IP publica ni el puerto.
+	pkt[0x2D] = 0x01
+	putU16(pkt, 0x30, 0x0001)
+	pkt[0x32] = 0x11
+	putU16(pkt, 0x40, 0x2C)
+	copy(pkt[0x44:], []byte{0x23, 0x8B, 0x2A, 0xEE})
+	return pkt
+}
+
+// parseNatcheckResponse saca nuestro mapeo externo de la respuesta del
+// natcheck: IP publica como cadena en 0x4C y puerto en u16 LE en 0x5C. El
+// puerto del propio servidor y su IP vienen detras y no sirven para nada.
+func parseNatcheckResponse(packet []byte) (string, int, bool) {
+	if len(packet) < natcheckQuerySize {
+		return "", 0, false
+	}
+	if readU32(packet, 0x00) != p2pMarker {
+		return "", 0, false
+	}
+	ip := readCString(packet, 0x4C, 0x10)
+	port := int(readU16(packet, 0x5C))
+	if ip == "" || port <= 0 || port > 65535 {
+		return "", 0, false
+	}
+	return ip, port, true
+}
+
+// natcheckPublic pide al servidor natcheck nuestro mapeo externo.
+func natcheckPublic(conn *net.UDPConn, natURL string) *net.UDPAddr {
 	if natURL == "" {
 		return nil
 	}
-	host := strings.TrimPrefix(natURL, "udp://")
-	host = strings.Split(host, ":")[0]
-	port := 8300
-	if idx := strings.LastIndex(natURL, ":"); idx > 0 {
-		fmt.Sscanf(natURL[idx+1:], "%d", &port)
-	}
-	addr, err := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", host, port))
+	addr, err := net.ResolveUDPAddr("udp", strings.TrimPrefix(natURL, "udp://"))
 	if err != nil {
 		return nil
 	}
-	localUDPPort := conn.LocalAddr().(*net.UDPAddr).Port
+	pkt := buildNatcheckQuery()
 	buf := make([]byte, 4096)
 	for attempt := 0; attempt < 4; attempt++ {
-		pkt := buildP2pTestPacket(p2pProbeSeqLAN, sessionFlag, responseSessionID, localUDPPort, host, port, 0)
 		if _, err := conn.WriteToUDP(pkt, addr); err != nil {
 			continue
 		}
@@ -379,11 +414,11 @@ func natcheck(conn *net.UDPConn, sessionFlag string, responseSessionID int64, na
 		if err != nil {
 			continue
 		}
-		parsed, ok := parseP2pTestResponse(buf[:n])
-		if !ok || parsed.Address == "" || parsed.Port <= 0 {
+		ip, port, ok := parseNatcheckResponse(buf[:n])
+		if !ok {
 			continue
 		}
-		mapped, rerr := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", parsed.Address, parsed.Port))
+		mapped, rerr := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", ip, port))
 		if rerr == nil {
 			return mapped
 		}

@@ -165,3 +165,32 @@ func TestPlayBodyLayout(t *testing.T) {
 		t.Fatalf("cuerpo de play:\n got %q\nwant %q", got, want)
 	}
 }
+
+func TestAESCBCRejectsUnalignedInput(t *testing.T) {
+	key := make([]byte, 32)
+	if _, err := aesCBC(key, make([]byte, 17), true); err == nil {
+		t.Fatal("esperaba error con 17 bytes, no es multiplo de 16")
+	}
+	if _, err := aesCBC(key, nil, false); err == nil {
+		t.Fatal("esperaba error con entrada vacia")
+	}
+	if _, err := aesCBC(key, make([]byte, 32), true); err != nil {
+		t.Fatalf("32 bytes deberia valer: %v", err)
+	}
+}
+
+func TestDecodeQuiiPacketRejectsUnalignedBody(t *testing.T) {
+	key := make([]byte, 32)
+	// Cabecera de tipo transparente (0xFE) con un tamano de cuerpo que no es
+	// multiplo de 16: es lo que sale al descifrar basura de un flujo
+	// desincronizado, y antes provocaba un panic en CryptBlocks.
+	clear := quiiHeader(0xFE, 1700000000, 20, 20, 0, 0, 0, 0, 0)
+	enc, err := aesCBC(key, clear, true)
+	if err != nil {
+		t.Fatalf("cabecera: %v", err)
+	}
+	buf := append(enc, make([]byte, 64)...)
+	if _, used, err := decodeQuiiPacket(key, buf); err == nil {
+		t.Fatalf("esperaba error, used=%d", used)
+	}
+}
