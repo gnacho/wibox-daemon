@@ -1,96 +1,100 @@
 # wibox-daemon
 
-Daemon en Go para Linux x86 que habla el protocolo del Fermax Wi-Box de
-generacion cloud (modelo IDS7938, SDK Quvii/ubell) y expone una API HTTP
-sencilla para Home Assistant u otras apps.
+Go daemon for Linux x86 that speaks the Fermax Wi-Box protocol from the cloud
+generation (model IDS7938, Quvii/ubell SDK) and exposes a simple HTTP API for
+Home Assistant or other apps.
 
-Sustituye al movil como pasarela: no hace falta tener la app abierta ni el
-telefono a mano.
+It replaces the phone as the gateway: you do not need the app open or the phone
+at hand.
 
-## Que hace hoy
+*[Read this in Spanish](README.es.md)*
 
-- Login contra el cloud del fabricante (`r1-8.qvcloud.net`) con el canal
-  duplex de userauth.
-- Lista de dispositivos de la cuenta.
-- Token del dispositivo (auth-code de 64 caracteres y clave de cifrado de 32).
-- Apertura de puerta por QUII sobre TCP contra el timbre en la red local.
-- Descubrimiento del timbre en la red local (`-discover`): escanea el puerto
-  QUII de las /24 de la maquina y hace el setup contra cada candidato.
-- API HTTP con token: `/health`, `/devices`, `/open`.
+## What it does today
 
-## Que NO hace
+- Login against the manufacturer cloud (`r1-8.qvcloud.net`) over the userauth
+  duplex channel.
+- Device list of the account.
+- Device token (64-character auth-code and 32-byte encryption key).
+- Door opening over QUII on TCP against the doorbell on the local network.
+- Doorbell discovery on the local network (`-discover`): scans the QUII port
+  in the machine's /24s and runs the setup against every candidate.
+- Token-protected HTTP API: `/health`, `/devices`, `/open`.
 
-- **No abre la puerta en remoto.** El camino remoto del fabricante pasa por un
-  tunel P2P que implementa su SDK propietario, que solo existe compilado para
-  arm64 (`libqv-p2p-v2.so`). Sin ese binario no hay tunel. El daemon funciona
-  por tanto cuando esta en la misma red que el timbre.
-- No manda video ni audio. Solo abre la puerta y consulta estado.
+## What it does NOT do
 
-## Compilar
+- **It does not open the door remotely.** The manufacturer's remote path goes
+  through a P2P tunnel implemented by its proprietary SDK, which only ships
+  compiled for arm64 (`libqv-p2p-v2.so`). Without that binary there is no
+  tunnel. The daemon therefore works when it is on the same network as the
+  doorbell.
+- It does not send video or audio. It only opens the door and queries state.
+
+## Build
 
 ```
 go build -o wibox-daemon .
 ```
 
-Probado con Go 1.27 en `linux/amd64`. Tambien compila para arm64:
+Tested with Go 1.27 on `linux/amd64`. It also builds for arm64:
 
 ```
 GOARCH=arm64 go build -o wibox-daemon-arm64 .
 ```
 
-## Configuracion
+## Configuration
 
-Todo por variables de entorno (o un fichero `EnvironmentFile` de systemd):
+Everything through environment variables (or a systemd `EnvironmentFile`):
 
-| Variable | Para que |
+| Variable | Purpose |
 |---|---|
-| `WIBOX_ACCOUNT` | Cuenta del timbre (la que devuelve aceptar la invitacion) |
-| `WIBOX_PASSWORD` | Contrasena de esa cuenta |
-| `WIBOX_CLIENT_ID` | Identificador de cliente de la app (por defecto `003-2021-87dad215f30f1f7e`) |
-| `WIBOX_DEVICE_ID` | UDID del timbre (por defecto el que se use en `/open`) |
-| `WIBOX_UNLOCK_PASSWORD` | Pin de apertura (por defecto `0925`) |
-| `WIBOX_LAN_ADDR` | `ip:puerto` del timbre en la red local (puerto de stream, 34567 por defecto) |
-| `WIBOX_LAN_PORT` | Puerto que escanea `-discover` (por defecto `34567`) |
-| `WIBOX_API_TOKEN` | Token de la API HTTP. Vacio = sin autenticacion |
-| `WIBOX_API_PORT` | Puerto de la API (por defecto `8087`) |
-| `WIBOX_CHANNEL` / `WIBOX_STREAM` | Canal y stream de QUII (por defecto `1` y `1`) |
-| `WIBOX_BASE_URL` | Cloud del fabricante |
-| `WIBOX_DEBUG` | Cualquier valor activa trazas HTTP |
+| `WIBOX_ACCOUNT` | Doorbell account (the one returned when accepting the invitation) |
+| `WIBOX_PASSWORD` | Password of that account |
+| `WIBOX_CLIENT_ID` | App client identifier (defaults to `003-2021-87dad215f30f1f7e`) |
+| `WIBOX_DEVICE_ID` | Doorbell UDID (when unset, the one passed in `/open` is used) |
+| `WIBOX_UNLOCK_PASSWORD` | Opening PIN (defaults to `0925`) |
+| `WIBOX_LAN_ADDR` | `ip:port` of the doorbell on the local network (stream port, 34567 by default) |
+| `WIBOX_LAN_PORT` | Port scanned by `-discover` (defaults to `34567`) |
+| `WIBOX_API_TOKEN` | HTTP API token. Empty = no authentication |
+| `WIBOX_API_PORT` | API port (defaults to `8087`) |
+| `WIBOX_CHANNEL` / `WIBOX_STREAM` | QUII channel and stream (defaults to `1` and `1`) |
+| `WIBOX_BASE_URL` | Manufacturer cloud |
+| `WIBOX_DEBUG` | Any value enables HTTP traces |
 
-## Descubrir el timbre en la red local
+## Discovering the doorbell on the local network
 
-Si no sabes la IP del timbre, el daemon la busca:
+If you do not know the doorbell IP, the daemon looks for it:
 
 ```
 ./wibox-daemon -discover
 ```
 
-Escanea el puerto QUII (34567 por defecto) en las /24 de las interfaces de la
-maquina, hace el setup contra cada candidato y, si encuentra uno, imprime la
-linea `WIBOX_LAN_ADDR=...` lista para pegar en la configuracion. No abre la
-puerta ni pide video: solo el handshake.
+It scans the QUII port (34567 by default) in the /24s of the machine
+interfaces, runs the setup against every candidate and, if it finds one, prints
+the `WIBOX_LAN_ADDR=...` line ready to paste into the configuration. It does not
+open the door or request video: only the handshake.
 
-Ojo: el timbre solo responde si el daemon corre en la misma red que el. Desde
-otra red el escaneo no encuentra nada, y eso no es un fallo del daemon.
+Note: the doorbell only answers when the daemon runs on the same network as the
+doorbell. From another network the scan finds nothing, and that is not a daemon
+failure.
 
-## Comprobar el acceso al cloud
+## Checking cloud access
 
 ```
 ./wibox-daemon -check
 ```
 
-Hace login, lista los dispositivos y pide el token. Es la forma rapida de ver
-si las credenciales siguen valiendo.
+It logs in, lists the devices and requests the token. It is the quick way to
+check whether the credentials are still valid.
 
 ## API
 
 ```
-GET  /health                      sin token
+GET  /health                      no token
 GET  /devices                     Authorization: Bearer <token>
 GET  /open?device=<udid>          Authorization: Bearer <token>
 ```
 
-Ejemplos:
+Examples:
 
 ```
 curl http://192.168.1.50:8087/health
@@ -99,46 +103,52 @@ curl -H "Authorization: Bearer $WIBOX_API_TOKEN" \
      "http://192.168.1.50:8087/open?device=23123csfewyk"
 ```
 
-## Verificar la apertura en el edificio
+## Verifying the door opening in the building
 
-`docs/verificacion-edificio.md` es el guion para la visita: descubrir el timbre,
-comprobar el cloud, abrir la puerta y leer los errores. La apertura real solo se
-puede probar en la misma red que el timbre.
+`docs/building-verification.md` is the script for the visit: discover the
+doorbell, check the cloud, open the door and read the errors. The real opening
+can only be tested on the same network as the doorbell.
 
-## Despliegue
+## Deployment
 
-Ver `deploy/wibox-daemon.service` (systemd) y `deploy/haos-wibox.yaml` (Home
-Assistant). El daemon no necesita root: escucha en un puerto alto y solo habla
-hacia fuera.
+See `deploy/wibox-daemon.service` (systemd) and `deploy/haos-wibox.yaml` (Home
+Assistant). The daemon does not need root: it listens on a high port and only
+talks outwards.
 
-## Protocolo
+## Protocol
 
-El detalle esta en `docs/protocol.md` del repo de la app Android
-(`gnacho/wibox-android`). Resumen de lo que implementa este daemon:
+The details are in `docs/protocol.md` in the Android app repo
+(`gnacho/wibox-android`). Summary of what this daemon implements:
 
-1. **userauth duplex**: `GET /auth/nologin;jus_duplex=down` solo para obtener la
-   cookie `jsessionid`, `POST /auth/nologin;jus_duplex=up` con el envelope XML,
-   y despues `GET .../down` para recoger la respuesta encolada. El orden importa:
-   si el long-poll esta en vuelo cuando llega la subida, el gateway contesta
+1. **userauth duplex**: `GET /auth/nologin;jus_duplex=down` only to get the
+   `jsessionid` cookie, `POST /auth/nologin;jus_duplex=up` with the XML
+   envelope, and then `GET .../down` to collect the queued response. The order
+   matters: if the long-poll is in flight when the upload arrives, the gateway
+   answers
    `CAUTHNETClient::Response(packet): BeginResponseGenerator return failed`.
-2. **Envelope XStream**: `content` antes de `header`, campos en kebab-case,
-   `version` vacia, indentacion de 3 espacios.
-3. **QUII sobre TCP**: setup de 32 bytes con `0xA9` en claro, PLAY con usuario
-   `adminapp2`, y ordenes transparentes con tipo `0xFE`. Cifrado AES-256-CBC con
-   IV de ceros y SHA-256 de (cabecera clara + cuerpo) pegado al cuerpo.
-4. **Apertura**: orden transparente 4, cuerpo con numero de cerradura, canal, y
-   el SHA-256 hexadecimal del pin a partir del byte 16.
+2. **XStream envelope**: `content` before `header`, kebab-case fields, empty
+   `version`, 3-space indentation.
+3. **QUII over TCP**: 32-byte setup with plaintext `0xA9`, PLAY with user
+   `adminapp2`, and transparent commands with type `0xFE`. AES-256-CBC with a
+   zero IV and SHA-256 of (plaintext header + body) appended to the body.
+4. **Opening**: transparent command 4, body with lock number, channel, and the
+   hexadecimal SHA-256 of the pin from byte 16.
 
-## Verificacion
+## Verification
 
 ```
 go test ./...
 ```
 
-22 tests: envelope XStream byte a byte contra el formato del cliente oficial,
-parseo de respuestas reales capturadas del gateway, vector AES-256-CBC calculado
-aparte con openssl, disposicion de la cabecera QUII, cola SHA-256 del cuerpo,
-cuerpo de apertura (orden 4, pin en el byte 16), apertura completa sobre un
-socket de loopback que hace de timbre, rechazo de contrasena, setup con status
-malo, descubrimiento en LAN, y contrato HTTP de `/open` (token obligatorio, 200
-con `ok`, 502 con el codigo de error).
+22 tests: byte-for-byte XStream envelope against the official client format,
+parsing of real responses captured from the gateway, AES-256-CBC vector computed
+separately with openssl, QUII header layout, SHA-256 tail of the body, opening
+body (command 4, pin at byte 16), full opening over a loopback socket that acts
+as the doorbell, password rejection, setup with a bad status, LAN discovery, and
+the `/open` HTTP contract (token required, 200 with `ok`, 502 with the error
+code).
+
+## Related projects
+
+- [wibox-android](https://github.com/gnacho/wibox-android): Android app (Kotlin)
+  for the same ecosystem. The protocol notes live in its `docs/protocol.md`.

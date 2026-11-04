@@ -1,12 +1,12 @@
-# Home Assistant: abre el portal con el daemon, sin depender del movil.
-# Sustituye la IP y el token por los tuyos.
+# Home Assistant: open the door with the daemon, without depending on the phone.
+# Replace the IP and the token with your own.
 
 rest_command:
-  wibox_abrir:
+  wibox_open:
     url: "http://192.168.1.50:8087/open?device=23123csfewyk"
     method: GET
     headers:
-      Authorization: "Bearer CAMBIA_EL_TOKEN"
+      Authorization: "Bearer CHANGE_ME"
     timeout: 30
 
 sensor:
@@ -14,7 +14,7 @@ sensor:
     name: Wibox
     resource: "http://192.168.1.50:8087/devices"
     headers:
-      Authorization: "Bearer CAMBIA_EL_TOKEN"
+      Authorization: "Bearer CHANGE_ME"
     value_template: >-
       {% set d = value_json.devices[0] if value_json.devices else None %}
       {{ 'online' if d else 'offline' }}
