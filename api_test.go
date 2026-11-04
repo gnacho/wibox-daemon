@@ -97,3 +97,28 @@ func TestHealthWithoutToken(t *testing.T) {
 		t.Fatalf("codigo %d", rec.Code)
 	}
 }
+
+func TestRootListsEndpoints(t *testing.T) {
+	d := &daemon{cfg: config{apiToken: "t"}}
+	rec := httptest.NewRecorder()
+	d.routes().ServeHTTP(rec, httptest.NewRequest("GET", "/", nil))
+	if rec.Code != 200 {
+		t.Fatalf("codigo %d", rec.Code)
+	}
+	var body map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("json: %v", err)
+	}
+	if body["service"] != "wibox-daemon" {
+		t.Fatalf("service=%v", body["service"])
+	}
+}
+
+func TestUnknownPathIs404(t *testing.T) {
+	d := &daemon{cfg: config{apiToken: "t"}}
+	rec := httptest.NewRecorder()
+	d.routes().ServeHTTP(rec, httptest.NewRequest("GET", "/nada", nil))
+	if rec.Code != 404 {
+		t.Fatalf("codigo %d, se esperaba 404", rec.Code)
+	}
+}

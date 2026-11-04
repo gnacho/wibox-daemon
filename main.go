@@ -187,8 +187,26 @@ func (d *daemon) writeJSON(w http.ResponseWriter, code int, v any) {
 	json.NewEncoder(w).Encode(v)
 }
 
+// version la fija el build con -ldflags "-X main.version=...".
+var version = "dev"
+
 func (d *daemon) routes() http.Handler {
 	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/" {
+			http.NotFound(w, r)
+			return
+		}
+		d.writeJSON(w, 200, map[string]any{
+			"service": "wibox-daemon",
+			"version": version,
+			"endpoints": map[string]string{
+				"/health":  "GET, sin token",
+				"/devices": "GET, Authorization: Bearer <token>",
+				"/open":    "GET ?device=<id>, Authorization: Bearer <token>",
+			},
+		})
+	})
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		d.writeJSON(w, 200, map[string]any{"ok": true})
 	})
