@@ -50,6 +50,11 @@ export WIBOX_MPEGTS
 # go2rtc no reenvia el stderr de sus hijos, asi que el log del proceso de video
 # solo se puede ver si el daemon escribe a un fichero propio.
 WIBOX_LOG_FILE=/data/video.log
+# El add-on puede estar semanas en marcha: si el log pasa de 2 MB se guarda
+# una copia y se empieza de cero para no llenar /data.
+if [ -f "$WIBOX_LOG_FILE" ] && [ "$(wc -c < "$WIBOX_LOG_FILE" 2>/dev/null || echo 0)" -gt 2097152 ]; then
+  mv -f "$WIBOX_LOG_FILE" "${WIBOX_LOG_FILE}.1" 2>/dev/null || true
+fi
 if ! touch "$WIBOX_LOG_FILE" 2>/dev/null; then
   WIBOX_LOG_FILE=/tmp/video.log
   echo "wibox: /data no es escribible, log de video en ${WIBOX_LOG_FILE}"
