@@ -136,3 +136,24 @@ tunnel with the doorbell is up (which needs a waking window). Until then
 That is also why Home Assistant's camera flow used to time out: it validates by
 opening the stream and gives up in seconds. See "The camera entry creates
 itself" for how the entry is created anyway.
+
+## Frames before the first keyframe
+
+By default every video frame before the first keyframe is discarded, because a
+decoder cannot use slices without a reference. The doorbell can go a whole
+session without sending one, and then a consumer receives audio and nothing
+else, which is what made Home Assistant's stream validation fail.
+
+`WIBOX_VIDEO_ALL_FRAMES=1`, or the `video_all_frames` add-on option, forwards
+every frame instead. Measured with the bell awake for a minute:
+
+```
+1125 video frames, 1785248 bytes, first frame 352x288 at 20 fps
+zero keyframes, NAL census map[1:1055 7:45]
+```
+
+So the stream is well formed and a validator accepts it, but the picture is
+still not viewable: ffmpeg answers `top block unavailable for requested intra
+mode` and writes nothing, and Home Assistant's decoders would do no better. The
+option is off by default for that reason: it fills the pipe without producing a
+picture.

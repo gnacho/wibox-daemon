@@ -80,6 +80,7 @@ Todo por variables de entorno (o un fichero `EnvironmentFile` de systemd):
 | `WIBOX_MPEGTS` | `1` muxea video y audio G.711A en MPEG-TS, para que un solo pipe `exec:` lleve los dos |
 | `WIBOX_AUDIO_FILE` | Escribe el audio G.711A crudo en ese fichero en vez de stderr |
 | `WIBOX_PLAY_RESENDS` | Veces que se reenvia el play esperando keyframe (por defecto `3`, `0` lo desactiva) |
+| `WIBOX_VIDEO_ALL_FRAMES` | `1` reenvia los frames de video anteriores al primer keyframe (por defecto apagado). Los colores salen mal hasta que llega un keyframe, pero hay imagen y el flujo es valido |
 | `WIBOX_CONTROL_SOCK` | Socket unix donde el proceso de video atiende las peticiones de apertura (por defecto `/tmp/wibox-video.sock`) |
 | `WIBOX_LOG_FILE` | Escribe tambien el log en este fichero. Necesario dentro del add-on: go2rtc se queda con el stderr del hijo |
 | `WIBOX_CLOUD_CHECK` | Segundos entre comprobaciones del login contra el cloud, publicadas en `/status` (por defecto `600`, `0` lo desactiva) |

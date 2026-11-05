@@ -82,6 +82,7 @@ Everything through environment variables (or a systemd `EnvironmentFile`):
 | `WIBOX_MPEGTS` | `1` muxes video and G.711A audio into MPEG-TS, so one `exec:` pipe carries both |
 | `WIBOX_AUDIO_FILE` | Writes the raw G.711A audio to that file instead of stderr |
 | `WIBOX_PLAY_RESENDS` | Times the play is resent while waiting for a keyframe (defaults to `3`, `0` disables it) |
+| `WIBOX_VIDEO_ALL_FRAMES` | `1` forwards video frames before the first keyframe (default off). Colours are wrong until a keyframe arrives, but there is a picture and the stream is well formed |
 | `WIBOX_CONTROL_SOCK` | Unix socket where the video process takes door-opening requests (default `/tmp/wibox-video.sock`) |
 | `WIBOX_LOG_FILE` | Also write the log to this file. Needed inside the add-on: go2rtc swallows its child stderr |
 | `WIBOX_CLOUD_CHECK` | Seconds between cloud login checks reported in `/status` (default `600`, `0` disables it) |
