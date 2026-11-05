@@ -240,54 +240,75 @@ func runProbeWithHandshake(conn *net.UDPConn, info *p2pConnectInfo, sessionFlag 
 	if len(targets) == 0 {
 		return nil, fmt.Errorf("sin targets de probe")
 	}
-	buf := make([]byte, 4096)
-
+	type probeTarget struct {
+		addr   *net.UDPAddr
+		packet []byte
+	}
+	var list []probeTarget
 	for _, target := range targets {
 		addr, err := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", target.IP, target.Port))
 		if err != nil {
 			continue
 		}
-		packet := buildP2pTestPacket(probeSeqFor(target.Kind), sessionFlag, responseSessionID, localUDPPort, target.IP, target.Port, target.TestMode)
-		acked := false
+		list = append(list, probeTarget{
+			addr:   addr,
+			packet: buildP2pTestPacket(probeSeqFor(target.Kind), sessionFlag, responseSessionID, localUDPPort, target.IP, target.Port, target.TestMode),
+		})
+	}
+	if len(list) == 0 {
+		return nil, fmt.Errorf("p2p probe: ningun target resoluble")
+	}
 
-		for attempt := 0; attempt < attemptsPerTarget && !acked; attempt++ {
-			if _, err := conn.WriteToUDP(packet, addr); err != nil {
-				continue
+	// Se sondean todos los candidatos a la vez sobre el mismo socket: en serie
+	// eran hasta tres esperas de 1,5 s por intento y el arranque del stream se
+	// iba a nueve segundos. Hay un solo lector, que es el que decide.
+	done := make(chan struct{})
+	defer close(done)
+	go func() {
+		for attempt := 0; attempt < attemptsPerTarget; attempt++ {
+			for _, t := range list {
+				conn.WriteToUDP(t.packet, t.addr)
 			}
-			deadline := time.Now().Add(timeout)
-			for time.Now().Before(deadline) {
-				conn.SetReadDeadline(deadline)
-				n, sender, err := conn.ReadFromUDP(buf)
-				if err != nil {
-					break
-				}
-				data := buf[:n]
-				frame, ok := parseP2pTransportFrame(data)
-				if !ok || !flagMatches(sessionFlag, frame.SessionFlag) {
-					continue
-				}
-				if frame.PacketTypeFlag == 1 {
-					parsed, ok := parseP2pTestResponse(data)
-					if !ok || !parsed.ok() || parsed.Address == "" || parsed.Port <= 0 {
-						continue
-					}
-					peerAddr, err := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", parsed.Address, parsed.Port))
-					if err != nil {
-						continue
-					}
-					return &probeResult{peer: peerAddr, rank: rankOf(parsed.Address), acked: acked}, nil
-				}
-				// Request del timbre: ACK y active completan el punch.
-				ack := buildP2pTransportAck(frame, localUDPPort)
-				conn.WriteToUDP(ack, sender)
-				for _, tail := range []uint32{200, 102} {
-					act := buildP2pActivePacket(sessionFlag, uint32(rand.Int31()), localUDPPort, tail)
-					conn.WriteToUDP(act, sender)
-				}
-				acked = true
-				return &probeResult{peer: sender, rank: 2, acked: true}, nil
+			select {
+			case <-done:
+				return
+			case <-time.After(timeout):
 			}
 		}
+	}()
+
+	buf := make([]byte, 4096)
+	deadline := time.Now().Add(timeout * time.Duration(attemptsPerTarget+1))
+	for time.Now().Before(deadline) {
+		conn.SetReadDeadline(deadline)
+		n, sender, err := conn.ReadFromUDP(buf)
+		if err != nil {
+			break
+		}
+		data := buf[:n]
+		frame, ok := parseP2pTransportFrame(data)
+		if !ok || !flagMatches(sessionFlag, frame.SessionFlag) {
+			continue
+		}
+		if frame.PacketTypeFlag == 1 {
+			parsed, pok := parseP2pTestResponse(data)
+			if !pok || !parsed.ok() || parsed.Address == "" || parsed.Port <= 0 {
+				continue
+			}
+			peerAddr, rerr := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", parsed.Address, parsed.Port))
+			if rerr != nil {
+				continue
+			}
+			return &probeResult{peer: peerAddr, rank: rankOf(parsed.Address)}, nil
+		}
+		// Request del timbre: ACK y active completan el punch.
+		ack := buildP2pTransportAck(frame, localUDPPort)
+		conn.WriteToUDP(ack, sender)
+		for _, tail := range []uint32{200, 102} {
+			act := buildP2pActivePacket(sessionFlag, uint32(rand.Int31()), localUDPPort, tail)
+			conn.WriteToUDP(act, sender)
+		}
+		return &probeResult{peer: sender, rank: 2, acked: true}, nil
 	}
 	return nil, fmt.Errorf("p2p probe: ningun peer contesto")
 }
