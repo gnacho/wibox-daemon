@@ -43,6 +43,15 @@ export WIBOX_UNLOCK_PASSWORD WIBOX_API_TOKEN WIBOX_REMOTE WIBOX_REMOTE_ONLY
 export WIBOX_API_PORT WIBOX_REMOTE_ATTEMPTS WIBOX_AWAKE_POLL WIBOX_VIDEO_WAIT
 export WIBOX_MPEGTS
 
+# go2rtc no reenvia el stderr de sus hijos, asi que el log del proceso de video
+# solo se puede ver si el daemon escribe a un fichero propio.
+WIBOX_LOG_FILE=/data/video.log
+if ! touch "$WIBOX_LOG_FILE" 2>/dev/null; then
+  WIBOX_LOG_FILE=/tmp/video.log
+  echo "wibox: /data no es escribible, log de video en ${WIBOX_LOG_FILE}"
+fi
+export WIBOX_LOG_FILE
+
 echo "wibox: cuenta ${WIBOX_ACCOUNT}, dispositivo ${WIBOX_DEVICE_ID}, API en el puerto ${WIBOX_API_PORT}"
 
 # go2rtc arranca el daemon bajo demanda cuando un cliente pide el stream, asi

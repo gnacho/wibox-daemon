@@ -76,6 +76,7 @@ Everything through environment variables (or a systemd `EnvironmentFile`):
 | `WIBOX_AUDIO_FILE` | Writes the raw G.711A audio to that file instead of stderr |
 | `WIBOX_PLAY_RESENDS` | Times the play is resent while waiting for a keyframe (defaults to `3`, `0` disables it) |
 | `WIBOX_CONTROL_SOCK` | Unix socket where the video process takes door-opening requests (default `/tmp/wibox-video.sock`) |
+| `WIBOX_LOG_FILE` | Also write the log to this file. Needed inside the add-on: go2rtc swallows its child stderr |
 | `WIBOX_VIDEO_MAX` | Hard cap on one video session, in seconds (default `900`, `0` disables it) |
 | `WIBOX_DEBUG` | Any value enables HTTP and MQTT traces |
 

@@ -228,6 +228,7 @@ func runVideo(cfg config, session string, key []byte, password string, out io.Wr
 			maxPlayResends = n
 		}
 	}
+	log.Printf("video: tope de reenvios del play %d", maxPlayResends)
 	lastResend := time.Now()
 	var buf []byte
 	var videoFrames, audioFrames, keyFrames int

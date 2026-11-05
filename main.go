@@ -340,6 +340,11 @@ func main() {
 	}
 
 	cfg := loadConfig()
+	if done, lerr := setupLogFile(os.Getenv("WIBOX_LOG_FILE")); lerr != nil {
+		log.Printf("log a fichero: %v", lerr)
+	} else {
+		defer done()
+	}
 	clientID = cfg.clientID
 	d := &daemon{cfg: cfg, auth: NewUserAuth(cfg.baseURL, cfg.clientID), started: time.Now()}
 
