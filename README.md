@@ -115,7 +115,11 @@ check whether the credentials are still valid.
 GET  /health                      no token
 GET  /devices                     Authorization: Bearer <token>
 GET  /open?device=<udid>          Authorization: Bearer <token>
+GET  /status                      Authorization: Bearer <token>
 ```
+
+`/status` reports the version, uptime, whether a video session is alive and the
+last opening attempt (route, code, error, time).
 
 Examples:
 

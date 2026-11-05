@@ -111,7 +111,11 @@ si las credenciales siguen valiendo.
 GET  /health                      sin token
 GET  /devices                     Authorization: Bearer <token>
 GET  /open?device=<udid>          Authorization: Bearer <token>
+GET  /status                      Authorization: Bearer <token>
 ```
+
+`/status` informa de la version, el tiempo encendido, si hay una sesion de
+video viva y el ultimo intento de apertura (via, codigo, error y hora).
 
 Ejemplos:
 
