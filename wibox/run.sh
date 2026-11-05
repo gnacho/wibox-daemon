@@ -42,4 +42,19 @@ export WIBOX_API_PORT WIBOX_REMOTE_ATTEMPTS WIBOX_AWAKE_POLL WIBOX_VIDEO_WAIT
 
 echo "wibox: cuenta ${WIBOX_ACCOUNT}, dispositivo ${WIBOX_DEVICE_ID}, API en el puerto ${WIBOX_API_PORT}"
 
-exec /usr/bin/wibox-daemon
+# go2rtc arranca el daemon bajo demanda cuando un cliente pide el stream, asi
+# que el video solo se pide al timbre cuando alguien mira. starttimeout es largo
+# a proposito: el timbre duerme y puede tardar minutos en despertar.
+cat > /data/go2rtc.yaml <<'YAML'
+streams:
+  wibox: exec:/usr/bin/wibox-daemon -video#killsignal=2#killtimeout=15#starttimeout=600
+api:
+  listen: "0.0.0.0:1984"
+rtsp:
+  listen: "0.0.0.0:8554"
+YAML
+
+# La API HTTP (apertura y estado) va en segundo plano; el proceso principal es
+# go2rtc.
+/usr/bin/wibox-daemon &
+exec /usr/bin/go2rtc -config /data/go2rtc.yaml

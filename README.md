@@ -184,6 +184,22 @@ The timeout has to be generous: if the doorbell is asleep the daemon keeps
 retrying until it gets a peer, and only then opens. `WIBOX_REMOTE_ATTEMPTS` and
 the `attempts` option bound that wait.
 
+### Video through the add-on
+
+The add-on ships its own [go2rtc](https://github.com/AlexxIT/go2rtc), so the
+camera works without installing anything else. go2rtc is the main process and
+the daemon is its `exec:` source, which means the video session is only started
+when someone watches the camera and is killed afterwards.
+
+```
+rtsp://<haos-ip>:8554/wibox
+```
+
+Add it in Home Assistant as a generic camera (RTSP) or through the go2rtc
+integration. `starttimeout` is set to 600 s because the doorbell sleeps and may
+take minutes to answer: open the camera on demand rather than leaving it
+always-on, and expect the first image to be slow when nobody has rung.
+
 ## Verifying the door opening in the building
 
 `docs/building-verification.md` is the script for the visit: discover the

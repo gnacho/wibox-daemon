@@ -180,6 +180,22 @@ El timeout tiene que ser generoso: si el timbre duerme, el daemon reintenta hast
 conseguir un peer y solo entonces abre. `WIBOX_REMOTE_ATTEMPTS` y la opcion
 `attempts` acotan esa espera.
 
+### Video a traves del add-on
+
+El add-on lleva su propio [go2rtc](https://github.com/AlexxIT/go2rtc), asi que la
+camara funciona sin instalar nada mas. go2rtc es el proceso principal y el daemon
+es su fuente `exec:`, o sea que la sesion de video solo se abre cuando alguien
+mira la camara y se corta al terminar.
+
+```
+rtsp://<ip-del-haos>:8554/wibox
+```
+
+Se anade en Home Assistant como camara generica (RTSP) o con la integracion de
+go2rtc. `starttimeout` esta en 600 s porque el timbre duerme y puede tardar
+minutos en responder: mejor abrir la camara bajo demanda que dejarla siempre
+encendida, y la primera imagen tarda cuando nadie ha llamado.
+
 ## Verificar la apertura en el edificio
 
 `docs/building-verification.md` es el guion para la visita: descubrir el timbre,
