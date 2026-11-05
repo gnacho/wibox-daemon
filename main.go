@@ -448,9 +448,13 @@ func (d *daemon) routes() http.Handler {
 		// ultima apertura salio bien hace un momento, se corta aqui.
 		if cd := d.cfg.openCooldown; cd > 0 {
 			if rec := d.lastOpenCopy(); rec != nil && rec.RC == 0 && time.Since(rec.At) < cd {
+				// Cuanto falta para poder reintentar, redondeando hacia
+				// arriba: un cero aqui invitaria a reintentar de inmediato.
+				remaining := int((cd - time.Since(rec.At)).Seconds()) + 1
 				d.writeJSON(w, 429, map[string]any{
-					"ok":    false,
-					"error": "se acaba de abrir: espera unos segundos",
+					"ok":            false,
+					"error":         "se acaba de abrir: espera unos segundos",
+					"retry_after_s": remaining,
 				})
 				return
 			}

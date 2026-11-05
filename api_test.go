@@ -485,6 +485,15 @@ func TestOpenHonoursTheCooldownAfterASuccess(t *testing.T) {
 	if calls != 0 {
 		t.Fatalf("no deberia haber abierto, llamadas=%d", calls)
 	}
+	var body struct {
+		RetryAfterS int `json:"retry_after_s"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
+		t.Fatalf("cuerpo del 429 ilegible: %v", err)
+	}
+	if body.RetryAfterS <= 0 {
+		t.Fatalf("retry_after_s=%d, se esperaba un valor positivo", body.RetryAfterS)
+	}
 }
 
 func TestOpenIgnoresAFailedAttemptForTheCooldown(t *testing.T) {
