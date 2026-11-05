@@ -96,6 +96,44 @@ func runVideo(cfg config, session string, key []byte, password string, out io.Wr
 		return lerr
 	}
 	defer release()
+
+	// Igual que la app: sin PPS no hay decodificador, y antes del primer IDR los
+	// slices no sirven para nada. Se espera al keyframe y entonces se escribe
+	// SPS+PPS+IDR de una tacada.
+	params := annexBParams()
+	// Con WIBOX_MPEGTS la salida es un MPEG-TS con las dos pistas, que es la
+	// unica forma de que go2rtc reciba imagen y sonido por el mismo pipe: dos
+	// fuentes exec no se mezclan, se tratan como failover.
+	var ts *tsMuxer
+	if v := os.Getenv("WIBOX_MPEGTS"); v != "" && v != "0" {
+		ts = newTSMuxer(out)
+		log.Printf("video: salida MPEG-TS con pistas H264 y G711A")
+	}
+
+	waitingIDR := true
+	// Los parametros se escriben con el primer frame, no con el primer keyframe:
+	// el MPEG-TS anuncia asi una pista H.264 valida desde el principio y la
+	// validacion del config flow de Home Assistant no depende de un IDR.
+	paramsWritten := false
+	writeParams := func(ptsMS int64) error {
+		if paramsWritten {
+			return nil
+		}
+		paramsWritten = true
+		if ts != nil {
+			return ts.WriteVideo(ptsMS, params)
+		}
+		_, err := out.Write(params)
+		return err
+	}
+	// La cabecera sale antes de conectar: go2rtc arranca este proceso cuando
+	// alguien mira y quien valida el stream (el config flow de Home Assistant)
+	// se rinde en segundos, mucho antes de que el tunel con el timbre este
+	// montado.
+	if err := writeParams(0); err != nil {
+		return fmt.Errorf("escribiendo cabecera del stream: %w", err)
+	}
+
 	s, err := establishRemote(cfg, session)
 	if err != nil {
 		return err
@@ -218,42 +256,6 @@ func runVideo(cfg config, session string, key []byte, password string, out io.Wr
 		log.Printf("video: play sync completo")
 	}()
 
-	// Igual que la app: sin PPS no hay decodificador, y antes del primer IDR los
-	// slices no sirven para nada. Se espera al keyframe y entonces se escribe
-	// SPS+PPS+IDR de una tacada.
-	params := annexBParams()
-	// Con WIBOX_MPEGTS la salida es un MPEG-TS con las dos pistas, que es la
-	// unica forma de que go2rtc reciba imagen y sonido por el mismo pipe: dos
-	// fuentes exec no se mezclan, se tratan como failover.
-	var ts *tsMuxer
-	if v := os.Getenv("WIBOX_MPEGTS"); v != "" && v != "0" {
-		ts = newTSMuxer(out)
-		log.Printf("video: salida MPEG-TS con pistas H264 y G711A")
-	}
-
-	waitingIDR := true
-	// Los parametros se escriben con el primer frame, no con el primer keyframe:
-	// el MPEG-TS anuncia asi una pista H.264 valida desde el principio y la
-	// validacion del config flow de Home Assistant no depende de un IDR.
-	paramsWritten := false
-	writeParams := func(ptsMS int64) error {
-		if paramsWritten {
-			return nil
-		}
-		paramsWritten = true
-		if ts != nil {
-			return ts.WriteVideo(ptsMS, params)
-		}
-		_, err := out.Write(params)
-		return err
-	}
-	// El tubo tiene que soltar bytes ya: quien valida el stream abre y espera
-	// pocos segundos, y hasta que el tunel conecta no hay frames. Con PAT, PMT
-	// y los parametros escritos de entrada, el transporte anuncia H.264 desde
-	// el primer byte y la validacion no depende de que el timbre despierte.
-	if err := writeParams(0); err != nil {
-		return fmt.Errorf("escribiendo cabecera del stream: %w", err)
-	}
 	nalCensus := map[int]int{}
 	skipped := 0
 	// El timbre emite un IDR al arrancar el stream, asi que enganchados a mitad
