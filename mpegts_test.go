@@ -204,3 +204,23 @@ func TestTSMuxerFromPipeline(t *testing.T) {
 	}
 	t.Logf("TS de %d bytes con video y audio", len(raw))
 }
+
+func TestTSMuxerNeverRepeatsAPTS(t *testing.T) {
+	var buf bytes.Buffer
+	m := newTSMuxer(&buf)
+	sample := []byte{0x00, 0x00, 0x00, 0x01, 0x65, 0x01}
+	for i := 0; i < 4; i++ {
+		if err := m.WriteVideo(1000, sample); err != nil {
+			t.Fatalf("WriteVideo: %v", err)
+		}
+	}
+	first := m.lastPTS[tsPIDVideo]
+	if first == 0 {
+		t.Fatal("sin marca de tiempo")
+	}
+	// Cuatro frames con la misma marca deben quedar en cuatro valores
+	// distintos y crecientes; el ultimo es el primero mas tres ticks.
+	if first != uint32(1000*90)+3 {
+		t.Fatalf("pts final = %d, se esperaba %d", first, 1000*90+3)
+	}
+}

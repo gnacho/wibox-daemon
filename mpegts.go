@@ -224,8 +224,10 @@ func (m *tsMuxer) ptsFor(pid uint16, ptsMS int64) uint32 {
 	if ptsMS < 0 {
 		pts = 0
 	}
-	if last, ok := m.lastPTS[pid]; ok && int32(pts-last) < 0 {
-		pts = last
+	if last, ok := m.lastPTS[pid]; ok && int32(pts-last) <= 0 {
+		// Repetir la marca no vale: el demuxer lo rechaza con "non
+		// monotonically increasing dts". Se avanza un tick de 90 kHz.
+		pts = last + 1
 	}
 	m.lastPTS[pid] = pts
 	return pts & 0x1FFFFFFF

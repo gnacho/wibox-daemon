@@ -1,5 +1,5 @@
 name: Wibox Doorbell
-version: "0.10.3"
+version: "0.10.4"
 slug: wibox
 description: Opens the Fermax Wi-Box doorbell through the vendor cloud
 url: https://github.com/gnacho/wibox-daemon
