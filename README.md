@@ -219,7 +219,9 @@ including the mandatory `advanced` block.
 `deploy/create-camera-when-ready.sh` does the waiting for you: it polls
 `/status`, prints `video_pending` each round so a sleeping doorbell is easy to
 tell from a stream without a picture, and creates the entry the first time
-`video_keyframes` moves above zero. It is idempotent.
+`video_keyframes` moves above zero. It is idempotent, and while it waits it keeps an RTSP pull alive with `ffmpeg`
+(unless you set `PULL=0`), because without a consumer go2rtc never starts the
+producer and the bell has nobody to send to.
 
 ## Home Assistant add-on
 

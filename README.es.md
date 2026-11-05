@@ -217,7 +217,9 @@ incluido el bloque `advanced` obligatorio.
 `deploy/create-camera-when-ready.sh` hace la espera por ti: consulta
 `/status`, imprime `video_pending` en cada ronda para distinguir un timbre
 dormido de un stream sin imagen, y crea la entrada la primera vez que
-`video_keyframes` pasa de cero. Es idempotente.
+`video_keyframes` pasa de cero. Es idempotente, y mientras espera mantiene una tirada del stream con `ffmpeg`
+(salvo `PULL=0`), porque sin consumidor go2rtc no arranca el productor y el
+timbre no tiene a quien mandar nada.
 
 ## Add-on de Home Assistant
 

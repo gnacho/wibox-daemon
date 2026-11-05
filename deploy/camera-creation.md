@@ -15,6 +15,10 @@ curl -s -H "Authorization: Bearer $WIBOX_API_TOKEN" \
 `video_keyframes` has to be greater than zero. If it is zero the config flow
 answers `{"stream_source": "timeout"}`.
 
+The script also keeps an RTSP pull alive (it needs `ffmpeg`) while it waits:
+without a consumer go2rtc never starts the producer, so the doorbell would
+never send anything. Set `PULL=0` to disable that.
+
 The two counters tell different stories. `video_pending` above zero means the
 doorbell is already sending media and the only thing missing is a keyframe, so
 the stream is alive and worth waiting for. `video_keyframes` above zero means

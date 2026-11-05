@@ -27,6 +27,10 @@ STREAM=${WIBOX_STREAM:-rtsp://$host:8556/wibox}
 STILL=$WIBOX_API/health
 POLL=${POLL:-60}
 MAX_ROUNDS=${MAX_ROUNDS:-0}
+# Sin un consumidor RTSP enganchado, go2rtc no arranca el productor y el
+# timbre no manda nada. Con PULL=1 (por defecto, si hay ffmpeg) se mantiene
+# una tirada del stream en segundo plano para forzarlo.
+PULL=${PULL:-1}
 
 log() {
   printf '%s %s\n' "$(date -Is)" "$*"
@@ -65,6 +69,19 @@ create() {
   echo "$answer"
   printf '%s' "$answer" | jq -e '.type == "create_entry"' >/dev/null 2>&1
 }
+
+puller=
+if [ "$PULL" != 0 ] && command -v ffmpeg >/dev/null 2>&1; then
+  (
+    while :; do
+      ffmpeg -v error -rtsp_transport tcp -i "$STREAM" -t 120 -f null - >/dev/null 2>&1
+      sleep 5
+    done
+  ) &
+  puller=$!
+  trap 'kill "$puller" 2>/dev/null' EXIT
+  log "tirando del stream para forzar al productor (pid $puller)"
+fi
 
 round=0
 while :; do
