@@ -59,6 +59,22 @@ safe to run twice.
 
 ## 3. Watch it without polling by hand
 
+`deploy/create-camera-when-ready.sh` does exactly this: it polls `/status`,
+waits for `video_keyframes` to move above zero and then creates the entry. It
+is idempotent (it leaves an existing wibox camera alone) and prints
+`video_pending` in each round so a sleeping doorbell is easy to tell from a
+stream that has media but no picture.
+
+```sh
+HASS_URL=http://192.168.1.244:8123 \
+HASS_TOKEN=... \
+WIBOX_API=http://192.168.1.244:8087 \
+WIBOX_TOKEN=wiboxhaos2026 \
+deploy/create-camera-when-ready.sh
+```
+
+The same loop by hand is below.
+
 The daemon publishes counters in `/status`, so a loop can wait for the right
 moment and create the entry once:
 
