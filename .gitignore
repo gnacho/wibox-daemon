@@ -1,3 +1,5 @@
 wibox-daemon
 wibox-daemon-*
 *.log
+dist/
+cover.out
