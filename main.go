@@ -48,6 +48,9 @@ type config struct {
 	// videoLock es el fichero de cerrojo del proceso de video: el timbre solo
 	// admite una sesion QUII, asi que no puede haber dos a la vez en el equipo.
 	videoLock string
+	// openCooldown evita que una doble pulsacion mande dos ordenes al rele.
+	// 0 lo desactiva.
+	openCooldown time.Duration
 	// cloudCheck es cada cuanto se comprueba el login y la lista contra el
 	// cloud para publicarlo en /status. 0 lo desactiva.
 	cloudCheck time.Duration
@@ -75,6 +78,7 @@ func loadConfig() config {
 	}
 	poll, _ := strconv.Atoi(env("WIBOX_AWAKE_POLL", "3"))
 	cloudEvery, _ := strconv.Atoi(env("WIBOX_CLOUD_CHECK", "600"))
+	cooldown, _ := strconv.Atoi(env("WIBOX_OPEN_COOLDOWN", "3"))
 	if poll < 1 {
 		poll = 3
 	}
@@ -96,6 +100,7 @@ func loadConfig() config {
 		remoteAttempts: attempts,
 		remotePoll:     time.Duration(poll) * time.Second,
 		cloudCheck:     time.Duration(cloudEvery) * time.Second,
+		openCooldown:   time.Duration(cooldown) * time.Second,
 		videoLock:      env("WIBOX_VIDEO_LOCK", ""),
 		remoteBudget:   time.Duration(budget) * time.Second,
 		controlSock:    env("WIBOX_CONTROL_SOCK", ""),
@@ -436,6 +441,18 @@ func (d *daemon) routes() http.Handler {
 			d.writeJSON(w, 400, map[string]any{"error": "falta device"})
 			return
 		}
+		// Una doble pulsacion no debe mandar dos ordenes al rele: si la
+		// ultima apertura salio bien hace un momento, se corta aqui.
+		if cd := d.cfg.openCooldown; cd > 0 {
+			if rec := d.lastOpenCopy(); rec != nil && rec.RC == 0 && time.Since(rec.At) < cd {
+				d.writeJSON(w, 429, map[string]any{
+					"ok":    false,
+					"error": "se acaba de abrir: espera unos segundos",
+				})
+				return
+			}
+		}
+
 		// Con wait=0 la llamada no espera a que el timbre despierte: si el
 		// ultimo chequeo del cloud lo vio dormido, se responde ya. Sirve para
 		// automatizaciones que no pueden quedarse cuatro minutos colgadas.

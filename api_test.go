@@ -464,3 +464,65 @@ func TestOpenWaitZeroTriesWhenTheBellIsAwake(t *testing.T) {
 		t.Fatalf("codigo=%d calls=%d", rec.Code, calls)
 	}
 }
+
+func TestOpenHonoursTheCooldownAfterASuccess(t *testing.T) {
+	calls := 0
+	d := newTestDaemon(func(string) (int, string, error) {
+		calls++
+		return 0, "", nil
+	})
+	d.cfg.openCooldown = 5 * time.Second
+	d.recordOpen("dev-por-defecto", "remote", 0, nil)
+
+	req := httptest.NewRequest("GET", "/open", nil)
+	req.Header.Set("Authorization", "Bearer secreto")
+	rec := httptest.NewRecorder()
+	d.routes().ServeHTTP(rec, req)
+
+	if rec.Code != 429 {
+		t.Fatalf("codigo %d, se esperaba 429", rec.Code)
+	}
+	if calls != 0 {
+		t.Fatalf("no deberia haber abierto, llamadas=%d", calls)
+	}
+}
+
+func TestOpenIgnoresAFailedAttemptForTheCooldown(t *testing.T) {
+	calls := 0
+	d := newTestDaemon(func(string) (int, string, error) {
+		calls++
+		return 0, "", nil
+	})
+	d.cfg.openCooldown = 5 * time.Second
+	d.recordOpen("dev-por-defecto", "remote", -1, errors.New("timeout"))
+
+	req := httptest.NewRequest("GET", "/open", nil)
+	req.Header.Set("Authorization", "Bearer secreto")
+	rec := httptest.NewRecorder()
+	d.routes().ServeHTTP(rec, req)
+
+	if rec.Code != 200 {
+		t.Fatalf("codigo %d, se esperaba 200", rec.Code)
+	}
+	if calls != 1 {
+		t.Fatalf("se esperaba una apertura, hubo %d", calls)
+	}
+}
+
+func TestOpenWithoutCooldownAlwaysTries(t *testing.T) {
+	calls := 0
+	d := newTestDaemon(func(string) (int, string, error) {
+		calls++
+		return 0, "", nil
+	})
+	d.recordOpen("dev-por-defecto", "remote", 0, nil)
+
+	req := httptest.NewRequest("GET", "/open", nil)
+	req.Header.Set("Authorization", "Bearer secreto")
+	rec := httptest.NewRecorder()
+	d.routes().ServeHTTP(rec, req)
+
+	if rec.Code != 200 || calls != 1 {
+		t.Fatalf("codigo=%d llamadas=%d", rec.Code, calls)
+	}
+}
