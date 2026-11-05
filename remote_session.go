@@ -84,6 +84,13 @@ func establishRemote(cfg config, session string) (*remoteSession, error) {
 	if err != nil {
 		return nil, fmt.Errorf("socket UDP: %w", err)
 	}
+	// El tunel mueve video y audio a rafagas y el buffer por defecto se queda
+	// corto: se pierden datagramas y el H264 llega con huecos. Se pide un
+	// buffer grande (el sistema limita a lo que permita net.core.rmem_max).
+	if rerr := conn.SetReadBuffer(8 * 1024 * 1024); rerr != nil && debugOn() {
+		log.Printf("socket UDP: buffer de lectura no ampliado: %v", rerr)
+	}
+	_ = conn.SetWriteBuffer(2 * 1024 * 1024)
 	localPort := conn.LocalAddr().(*net.UDPAddr).Port
 	localIPs := localIPv4s()
 	log.Printf("puerto UDP local %d, ips %v", localPort, localIPs)
