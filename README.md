@@ -290,6 +290,7 @@ Everything the daemon knows is in `/status`. These are the usual readings:
 | `video_session: true`, counters at zero | A player is connected but the bell has not sent anything yet. | Keep watching; it will fill up when the bell wakes. |
 | `last_open.rc: 0` | The door opened. | Nothing. |
 | `last_open.rc: -10029` | The opening PIN was rejected. | Fix `WIBOX_UNLOCK_PASSWORD`. |
+| Call answered with 429 | The cooldown is running: the last opening succeeded a moment ago. The body carries `retry_after_s`, the seconds left. | Wait that long; the second press is ignored on purpose. |
 | `last_open.rc: -1` with a p2pconnect timeout | The bell went back to sleep before the tunnel was ready. | Try again in a waking window. |
 
 ## Deployment

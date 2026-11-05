@@ -288,6 +288,7 @@ Todo lo que sabe el daemon esta en `/status`. Estas son las lecturas habituales:
 | `video_session: true` con contadores a cero | Hay un reproductor conectado pero el timbre aun no manda nada. | Esperar, se llenara cuando despierte. |
 | `last_open.rc: 0` | La puerta se abrio. | Nada. |
 | `last_open.rc: -10029` | El PIN de apertura fue rechazado. | Corregir `WIBOX_UNLOCK_PASSWORD`. |
+| La llamada responde 429 | El cooldown esta activo: la ultima apertura salio bien hace un momento. El cuerpo trae `retry_after_s` con los segundos que faltan. | Esperar ese tiempo; la segunda pulsacion se ignora a proposito. |
 | `last_open.rc: -1` con timeout de p2pconnect | El timbre volvio a dormirse antes de montar el tunel. | Reintentar en una ventana de despertar. |
 
 ## Despliegue
