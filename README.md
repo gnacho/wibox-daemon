@@ -192,7 +192,7 @@ the daemon is its `exec:` source, which means the video session is only started
 when someone watches the camera and is killed afterwards.
 
 ```
-rtsp://<haos-ip>:8554/wibox
+rtsp://<haos-ip>:8556/wibox
 ```
 
 Add it in Home Assistant as a generic camera (RTSP) or through the go2rtc

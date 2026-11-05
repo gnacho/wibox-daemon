@@ -1,5 +1,5 @@
 name: Wibox Doorbell
-version: "0.4.0"
+version: "0.4.1"
 slug: wibox
 description: Opens the Fermax Wi-Box doorbell through the vendor cloud
 url: https://github.com/gnacho/wibox-daemon
@@ -11,7 +11,7 @@ boot: auto
 init: false
 ports:
   8087/tcp: 8087
-  8554/tcp: 8554
+  8556/tcp: 8556
 ports_description:
   8087/tcp: HTTP API for rest_command and sensors
   8554/tcp: RTSP stream for Home Assistant

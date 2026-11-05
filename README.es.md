@@ -188,7 +188,7 @@ es su fuente `exec:`, o sea que la sesion de video solo se abre cuando alguien
 mira la camara y se corta al terminar.
 
 ```
-rtsp://<ip-del-haos>:8554/wibox
+rtsp://<ip-del-haos>:8556/wibox
 ```
 
 Se anade en Home Assistant como camara generica (RTSP) o con la integracion de
