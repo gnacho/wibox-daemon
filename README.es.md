@@ -140,7 +140,7 @@ video viva y el ultimo intento de apertura (via, codigo, error y hora).
 Publica ademas `video_frames`, `video_keyframes` y `video_pending`, siempre
 presentes y a cero cuando no hay stream: el ultimo cuenta los frames ya
 recibidos que no se pueden usar hasta que llegue un keyframe, que es como se
-distingue un stream que lleva media sin imagen de uno que no manda nada.
+distingue un stream que lleva media sin imagen de uno que no manda nada. `device_online` dice si el timbre aparecia en linea la ultima vez que el daemon pregunto al cloud, y `devices_checked` cuando fue.
 
 Ejemplos:
 

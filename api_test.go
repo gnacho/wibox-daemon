@@ -363,3 +363,62 @@ func TestStatusReportsCloudFailure(t *testing.T) {
 		t.Fatal("falta cloud_error con el motivo")
 	}
 }
+
+func TestStatusReportsDeviceState(t *testing.T) {
+	d := newTestDaemon(nil)
+	d.cfg.deviceID = "dev-por-defecto"
+	d.recordDevices([]deviceInfo{{ID: "dev-por-defecto", Name: "Portal", Online: true}})
+	srv := httptest.NewServer(d.routes())
+	defer srv.Close()
+
+	req, err := http.NewRequest("GET", srv.URL+"/status", nil)
+	if err != nil {
+		t.Fatalf("peticion: %v", err)
+	}
+	req.Header.Set("Authorization", "Bearer secreto")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("status: %v", err)
+	}
+	defer resp.Body.Close()
+
+	var got struct {
+		DeviceOnline   bool   `json:"device_online"`
+		DevicesChecked string `json:"devices_checked"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&got); err != nil {
+		t.Fatalf("json: %v", err)
+	}
+	if !got.DeviceOnline {
+		t.Fatal("el timbre venia online en la ultima lista")
+	}
+	if got.DevicesChecked == "" {
+		t.Fatal("falta la marca de cuando se miro la lista")
+	}
+}
+
+func TestStatusReportsDeviceOffline(t *testing.T) {
+	d := newTestDaemon(nil)
+	d.cfg.deviceID = "dev-por-defecto"
+	d.recordDevices([]deviceInfo{{ID: "dev-por-defecto", Name: "Portal", Online: false}})
+	srv := httptest.NewServer(d.routes())
+	defer srv.Close()
+
+	req, _ := http.NewRequest("GET", srv.URL+"/status", nil)
+	req.Header.Set("Authorization", "Bearer secreto")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("status: %v", err)
+	}
+	defer resp.Body.Close()
+
+	var got struct {
+		DeviceOnline bool `json:"device_online"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&got); err != nil {
+		t.Fatalf("json: %v", err)
+	}
+	if got.DeviceOnline {
+		t.Fatal("el timbre venia offline en la ultima lista")
+	}
+}

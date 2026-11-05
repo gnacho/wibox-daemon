@@ -142,7 +142,7 @@ last opening attempt (route, code, error, time). It also carries
 `video_frames`, `video_keyframes` and `video_pending`, always present and at
 zero when nothing is streaming: the last one counts frames already received
 that cannot be used until a keyframe arrives, which is how you tell a stream
-that is sending media without a picture from one that is silent.
+that is sending media without a picture from one that is silent. `device_online` says whether the doorbell was listed as online the last time the daemon asked the cloud, and `devices_checked` is when that was.
 
 Examples:
 

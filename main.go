@@ -128,6 +128,11 @@ type daemon struct {
 	cloudOK  bool
 	cloudErr string
 	cloudAt  time.Time
+
+	// Ultima lista de dispositivos que devolvio el cloud, para que /status
+	// pueda decir si el timbre esta despierto sin preguntar en cada consulta.
+	devicesCache []deviceInfo
+	devicesAt    time.Time
 }
 
 func (d *daemon) recordOpen(deviceID, via string, rc int, err error) {
@@ -160,13 +165,39 @@ func (d *daemon) cloudState() (bool, string, time.Time) {
 
 // watchCloud comprueba cada intervalo que el login y la lista de dispositivos
 // siguen respondiendo. Si no, /status lo dice y Home Assistant puede avisar.
+// recordDevices guarda la ultima lista del cloud. Va con la marca de tiempo
+// para que /status pueda decir cuando se miro.
+func (d *daemon) recordDevices(list []deviceInfo) {
+	d.statusMu.Lock()
+	d.devicesCache = list
+	d.devicesAt = time.Now().UTC()
+	d.statusMu.Unlock()
+}
+
+// deviceOnlineState dice si ese dispositivo venia marcado como online en la
+// ultima lista y cuando se consulto. Sin lista devuelve false y marca cero.
+func (d *daemon) deviceOnlineState(deviceID string) (bool, time.Time) {
+	d.statusMu.Lock()
+	defer d.statusMu.Unlock()
+	if d.devicesAt.IsZero() {
+		return false, time.Time{}
+	}
+	for _, dev := range d.devicesCache {
+		if dev.ID == deviceID {
+			return dev.Online, d.devicesAt
+		}
+	}
+	return false, d.devicesAt
+}
+
 func (d *daemon) watchCloud(interval time.Duration) {
 	for {
 		if err := d.login(); err != nil {
 			d.recordCloud(false, err)
-		} else if _, err := d.auth.DeviceList(); err != nil {
+		} else if resp, err := d.auth.DeviceList(); err != nil {
 			d.recordCloud(false, err)
 		} else {
+			d.recordDevices(deviceInfosFrom(resp))
 			d.recordCloud(true, nil)
 		}
 		time.Sleep(interval)
@@ -221,6 +252,11 @@ func (d *daemon) devices() ([]deviceInfo, error) {
 	if err != nil {
 		return nil, err
 	}
+	return deviceInfosFrom(resp), nil
+}
+
+// deviceInfosFrom convierte la respuesta del cloud en la lista que usa la API.
+func deviceInfosFrom(resp *Response) []deviceInfo {
 	out := make([]deviceInfo, 0, len(resp.Devices))
 	for _, dev := range resp.Devices {
 		out = append(out, deviceInfo{
@@ -230,7 +266,7 @@ func (d *daemon) devices() ([]deviceInfo, error) {
 			Online: dev["online"] == "1" || dev["online-state"] == "1",
 		})
 	}
-	return out, nil
+	return out
 }
 
 // openDoor pide el token del dispositivo y abre la puerta por la via local.
@@ -343,6 +379,13 @@ func (d *daemon) routes() http.Handler {
 		// dependa de que el sensor cambie de forma.
 		out["video_frames"] = frames
 		out["video_keyframes"] = keys
+		// Ultima lista del cloud: asi Home Assistant sabe si el timbre esta
+		// despierto sin gastar una consulta por cada refresco del sensor.
+		online, devAt := d.deviceOnlineState(d.cfg.deviceID)
+		out["device_online"] = online
+		if !devAt.IsZero() {
+			out["devices_checked"] = devAt
+		}
 		// Frames ya recibidos que se descartan porque aun no llego el keyframe:
 		// asi se distingue "hay media pero falta IDR" de "no llega nada".
 		out["video_pending"] = pending
