@@ -74,6 +74,7 @@ Todo por variables de entorno (o un fichero `EnvironmentFile` de systemd):
 | `WIBOX_AUDIO_FILE` | Escribe el audio G.711A crudo en ese fichero en vez de stderr |
 | `WIBOX_PLAY_RESENDS` | Veces que se reenvia el play esperando keyframe (por defecto `3`, `0` lo desactiva) |
 | `WIBOX_CONTROL_SOCK` | Socket unix donde el proceso de video atiende las peticiones de apertura (por defecto `/tmp/wibox-video.sock`) |
+| `WIBOX_VIDEO_MAX` | Tope duro de una sesion de video, en segundos (por defecto `900`, `0` lo desactiva) |
 | `WIBOX_DEBUG` | Cualquier valor activa trazas HTTP y MQTT |
 
 La configuracion tambien se puede pasar con `-config <fichero>`. Asi es como lo

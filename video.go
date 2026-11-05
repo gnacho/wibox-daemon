@@ -246,6 +246,26 @@ func runVideo(cfg config, session string, key []byte, password string, out io.Wr
 	waitTimer := time.NewTimer(videoWait)
 	defer waitTimer.Stop()
 
+	// Tope de vida de la sesion: el timbre admite una sola conexion QUII, asi
+	// que un cliente RTSP colgado dejaria el portal ocupado sin limite. Al
+	// cumplirse el proceso termina y go2rtc lo relanza si hace falta.
+	maxSession := 15 * time.Minute
+	if v := os.Getenv("WIBOX_VIDEO_MAX"); v != "" {
+		if n, merr := strconv.Atoi(v); merr == nil && n >= 0 {
+			if n == 0 {
+				maxSession = 0
+			} else {
+				maxSession = time.Duration(n) * time.Second
+			}
+		}
+	}
+	var maxC <-chan time.Time
+	if maxSession > 0 {
+		maxTimer := time.NewTimer(maxSession)
+		defer maxTimer.Stop()
+		maxC = maxTimer.C
+	}
+
 	// Volcado en crudo del flujo del tunel: con el play ya aceptado llegan MB
 	// pero el parser no saca frames, asi que hay que ver los bytes tal cual.
 	var rawDump *os.File
@@ -313,6 +333,10 @@ func runVideo(cfg config, session string, key []byte, password string, out io.Wr
 					}
 					if !waitTimer.Stop() {
 						select {
+						case <-maxC:
+							log.Printf("video: sesion cerrada tras %s con %d frames de video y %d de audio",
+								maxSession, videoFrames, audioFrames)
+							return nil
 						case <-waitTimer.C:
 						default:
 						}
