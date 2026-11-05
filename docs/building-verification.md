@@ -58,6 +58,12 @@ With `WIBOX_LAN_ADDR` set and `WIBOX_REMOTE_ONLY=0`, the daemon tries the LAN
 first and only falls back to the cloud tunnel. A successful opening prints
 `rc=0`; the HTTP API answers `{"ok":true,"rc":0}` on `/open`.
 
+`/open` waits up to four minutes when the bell is asleep, because it keeps
+trying to catch a wake window. Add `&wait=0` to get a decision now: it answers
+**503** straight away when the last cloud check saw the bell offline. A second
+call within the cooldown (three seconds by default) answers **429** and the
+body carries `retry_after_s`.
+
 ## Step 4: the stream
 
 ```
@@ -67,8 +73,9 @@ ffprobe stream.ts
 
 With `WIBOX_MPEGTS=1` (the add-on sets it) the output is MPEG-TS with an H.264
 track and a G.711A track. Audio starts as soon as the bell sends it; the
-picture waits for a keyframe, which the bell schedules on its own (roughly
-every 90 s of stream, and not in every session). `ffprobe` reports the audio
+picture waits for a keyframe, and none of our captures ever contained one:
+3600 frames discarded (about three minutes at 20 fps) with a NAL census of
+`map[1:3455 7:145]`, no IDR and no PPS. `ffprobe` reports the audio
 track as `unknown`: it does not recognise A-law inside MPEG-TS.
 
 ## Step 5: talk to the visitor
@@ -90,6 +97,8 @@ Only over the LAN: the cloud tunnel has no speaker channel.
 | `data-encode-key de N bytes` | The token is not the one expected, check `-check` |
 | `timeout esperando p2pconnect` | Bell asleep (it runs on batteries) or offline |
 | No frames after the play | The bell did not send a keyframe yet |
+| HTTP 503 on `/open?wait=0` | The last cloud check saw the bell asleep, so it is not going to open right now |
+| HTTP 429 on `/open` | Cooldown after a successful opening, the body carries `retry_after_s` |
 
 ## What to bring back
 
@@ -97,3 +106,6 @@ Only over the LAN: the cloud tunnel has no speaker channel.
 - The `rc` of the opening and the log lines around it.
 - Whether the stream carried audio, video, both or nothing.
 - Whether `-talk` returned without error.
+- The `/status` values `device_online`, `devices_checked`, `video_pending` and
+  `video_lock_free`, which say whether the bell was awake, whether media was
+  arriving and whether another video process held the lock.
