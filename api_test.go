@@ -122,3 +122,38 @@ func TestUnknownPathIs404(t *testing.T) {
 		t.Fatalf("codigo %d, se esperaba 404", rec.Code)
 	}
 }
+
+// Con el stream en marcha la unica sesion del timbre la tiene el proceso de
+// video, asi que /open debe ir por su socket y no tocar el cloud.
+func TestOpenUsesVideoSession(t *testing.T) {
+	sock := testSockPath(t)
+	calls := 0
+	srv, err := newControlServer(sock, func() (int, error) {
+		calls++
+		return 0, nil
+	})
+	if err != nil {
+		t.Fatalf("servidor de control: %v", err)
+	}
+	defer srv.close()
+
+	d := &daemon{cfg: config{apiToken: "secreto", pin: "1379", controlSock: sock}}
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/open?device=23123csfewyk", nil)
+	req.Header.Set("Authorization", "Bearer secreto")
+	d.routes().ServeHTTP(rec, req)
+
+	if rec.Code != 200 {
+		t.Fatalf("codigo %d, cuerpo %s", rec.Code, rec.Body.String())
+	}
+	if calls != 1 {
+		t.Fatalf("el servidor de control se llamo %d veces", calls)
+	}
+	var body map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("json: %v", err)
+	}
+	if body["ok"] != true {
+		t.Fatalf("respuesta %v", body)
+	}
+}

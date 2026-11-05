@@ -154,6 +154,16 @@ func (d *daemon) openDoor(deviceID string) (int, string, error) {
 	if d.cfg.pin == "" {
 		return -1, "", fmt.Errorf("falta WIBOX_UNLOCK_PASSWORD: el pin de apertura no se adivina")
 	}
+	// Si el proceso de video tiene la sesion abierta, el timbre no admite una
+	// segunda: se le pide la apertura por su socket. Va antes que el login y
+	// el token porque no hacen falta para nada en ese camino.
+	if rc, handled, cerr := controlUnlock(d.cfg.controlSock); handled {
+		if cerr == nil {
+			log.Printf("open %s rc=0 por la sesion de video", deviceID)
+		}
+		return rc, "", cerr
+	}
+
 	if err := d.login(); err != nil {
 		return -1, "", err
 	}
@@ -166,16 +176,6 @@ func (d *daemon) openDoor(deviceID string) (int, string, error) {
 		return -1, "", fmt.Errorf("data-encode-key de %d bytes, se esperaban 32", len(key))
 	}
 	password := encodeDevicePassword(token.AuthCode)
-
-	// Si go2rtc tiene el stream abierto, la unica sesion del timbre la tiene
-	// el proceso de video. Se le pide la apertura por su socket en vez de
-	// montar otro tunel que solo conseguiria un BUSY.
-	if rc, handled, cerr := controlUnlock(d.cfg.controlSock); handled {
-		if cerr == nil {
-			log.Printf("open %s rc=0 por la sesion de video", deviceID)
-		}
-		return rc, token.Expired, cerr
-	}
 
 	// La via local va primero: es mas rapida y el video no sale del edificio.
 	if d.cfg.lanAddr != "" && !d.cfg.remoteOnly {
