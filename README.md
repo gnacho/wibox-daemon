@@ -124,6 +124,9 @@ same TCP port used for video, sends the audio in 40 ms frames and closes.
 It logs in, lists the devices and requests the token. It is the quick way to
 check whether the credentials are still valid.
 
+`./wibox-daemon -version` prints the build version and the platform it was
+compiled for, which is the fastest way to know what a deployment is running.
+
 ## API
 
 ```

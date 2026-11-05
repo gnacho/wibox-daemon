@@ -23,6 +23,7 @@ WIBOX_API_TOKEN="$(value api_token)"
 WIBOX_REMOTE_ATTEMPTS="$(value attempts)"
 WIBOX_AWAKE_POLL="$(value awake_poll)"
 WIBOX_VIDEO_WAIT="$(value video_wait)"
+WIBOX_CLOUD_CHECK="$(value cloud_check)"
 WIBOX_VIDEO_MAX="$(value video_max)"
 WIBOX_PLAY_RESENDS="$(value play_resends)"
 

@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -387,6 +388,7 @@ func (d *daemon) routes() http.Handler {
 
 func main() {
 	check := flag.Bool("check", false, "prueba login, lista de dispositivos y token contra el cloud y sale")
+	showVersion := flag.Bool("version", false, "imprime la version y la plataforma y sale")
 	discover := flag.Bool("discover", false, "escanea la red local en busca del timbre y sale")
 	video := flag.Bool("video", false, "abre el video remoto y escribe H264 Annex-B por stdout")
 	videoAudio := flag.Bool("video-audio", false, "con -video, escribe tambien el audio G711A por stderr")
@@ -396,6 +398,10 @@ func main() {
 	talkPath := flag.String("talk", "", "manda un WAV PCM16 mono 8 kHz al altavoz del timbre por LAN (necesita WIBOX_LAN_ADDR)")
 	decodePath := flag.String("decode", "", "analiza un volcado hecho con WIBOX_RAW_DUMP usando la clave del token")
 	flag.Parse()
+	if *showVersion {
+		fmt.Printf("wibox-daemon %s %s/%s\n", version, runtime.GOOS, runtime.GOARCH)
+		return
+	}
 
 	// Se aplica antes de loadConfig: lo que no venga ya en el entorno se toma del
 	// fichero. Asi go2rtc puede lanzar el daemon con -config y sin EnvironmentFile.

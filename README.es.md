@@ -120,6 +120,11 @@ en el mismo puerto TCP del video, manda el audio en tramas de 40 ms y cierra.
 Hace login, lista los dispositivos y pide el token. Es la forma rapida de ver
 si las credenciales siguen valiendo.
 
+`./wibox-daemon -version` imprime la version compilada y la plataforma para la
+que se construyo, que es la forma mas rapida de saber que corre un despliegue.
+Dentro del add-on esta misma comprobacion se puede programar con la opcion
+`cloud_check` (segundos, por defecto 600) y su resultado aparece en `/status`.
+
 ## API
 
 ```
