@@ -191,11 +191,14 @@ func (d *daemon) openDoor(deviceID string) (int, string, error) {
 	// Si el proceso de video tiene la sesion abierta, el timbre no admite una
 	// segunda: se le pide la apertura por su socket. Va antes que el login y
 	// el token porque no hacen falta para nada en ese camino.
-	if rc, handled, cerr := controlUnlock(d.cfg.controlSock); handled {
-		if cerr == nil {
-			log.Printf("open %s rc=0 por la sesion de video", deviceID)
-		}
-		return rc, "", cerr
+	if rc, handled, cerr := controlUnlock(d.cfg.controlSock); handled && cerr == nil {
+		log.Printf("open %s rc=0 por la sesion de video", deviceID)
+		d.recordOpen(deviceID, "video", rc, nil)
+		return rc, "", nil
+	} else if handled {
+		// La sesion de video existe pero no consiguio abrir (tunel muerto,
+		// timeout). Un tunel nuevo si puede, asi que no se descarta.
+		log.Printf("open: la sesion de video no pudo abrir (%v), se prueba la via directa", cerr)
 	}
 
 	if err := d.login(); err != nil {

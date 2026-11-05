@@ -273,3 +273,38 @@ func TestStatusReportsVideoFrames(t *testing.T) {
 		t.Fatalf("frames=%d keys=%d", got.VideoFrames, got.VideoKeys)
 	}
 }
+
+// Si la sesion de video existe pero no puede abrir, la API no debe rendirse:
+// un tunel nuevo si funciona.
+func TestOpenFallsBackWhenVideoSessionFails(t *testing.T) {
+	sock := t.TempDir() + "/ctrl.sock"
+	srv, err := newControlServer(sock, func() (int, error) {
+		return -1, errPinRejected
+	}, nil)
+	if err != nil {
+		t.Fatalf("servidor de control: %v", err)
+	}
+	defer srv.close()
+
+	direct := 0
+	d := &daemon{
+		cfg:      config{apiToken: "secreto", deviceID: "dev-por-defecto", controlSock: sock},
+		openFunc: func(string) (int, string, error) { direct++; return 0, "", nil },
+	}
+	ts := httptest.NewServer(d.routes())
+	defer ts.Close()
+
+	req, _ := http.NewRequest("GET", ts.URL+"/open", nil)
+	req.Header.Set("Authorization", "Bearer secreto")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("peticion: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		t.Fatalf("codigo %d", resp.StatusCode)
+	}
+	if direct != 1 {
+		t.Fatalf("se esperaba la via directa, llamadas=%d", direct)
+	}
+}
