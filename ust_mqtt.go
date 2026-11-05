@@ -625,22 +625,19 @@ func (m *ustMqtt) connectAndP2PConnect(localIPs []string, localUDPPort int, publ
 	requestSessionID := int64(rand.Uint32())
 
 	var info *p2pConnectInfo
-	asleep := false
 	for attempt := 1; attempt <= m.cfg.Attempts; attempt++ {
-		if asleep {
-			// Solo se le pide despertar. El p2pconnect se reserva para cuando
-			// el servidor lo da por online, para no dejar la sesion abierta.
+		// El aoffline de sub-device-state no es fiable: medido el 5-nov-2026,
+		// el servidor daba el timbre por dormido en el mismo minuto en que
+		// otro cliente obtenia candidatos y abria el tunel. Por eso aqui se
+		// manda p2pconnect SIEMPRE, y el estado/despertar solo se piden como
+		// intento adicional en cada vuelta.
+		if attempt > 1 {
 			if err := m.publish("sub-device-state", ustSubDeviceState{DevID: []string{m.cfg.DeviceID}}); err != nil {
 				return nil, "", err
 			}
 			if err := m.publish("device-awaken", ustAwaken{DevID: m.cfg.DeviceID}); err != nil {
 				return nil, "", err
 			}
-			if m.waitDeviceAwake(m.cfg.AwakePoll) {
-				asleep = false
-				log.Printf("p2p: timbre disponible, intento %d/%d", attempt, m.cfg.Attempts)
-			}
-			continue
 		}
 		content := ustP2PConnect{
 			DevID:         m.cfg.DeviceID,
@@ -659,18 +656,9 @@ func (m *ustMqtt) connectAndP2PConnect(localIPs []string, localUDPPort int, publ
 			info = r
 			break
 		} else if wasAsleep {
-			asleep = true
 			if attempt == 1 || attempt%20 == 0 || debugOn() {
-				log.Printf("p2p: timbre dormido, intento %d/%d", attempt, m.cfg.Attempts)
+				log.Printf("p2p: el servidor da el timbre por dormido, se reintenta igual, intento %d/%d", attempt, m.cfg.Attempts)
 			}
-			continue
-		}
-		// El timbre duerme: se le vuelve a pedir estado y despertar antes de repetir.
-		if err := m.publish("sub-device-state", ustSubDeviceState{DevID: []string{m.cfg.DeviceID}}); err != nil {
-			return nil, "", err
-		}
-		if err := m.publish("device-awaken", ustAwaken{DevID: m.cfg.DeviceID}); err != nil {
-			return nil, "", err
 		}
 	}
 	if info == nil {

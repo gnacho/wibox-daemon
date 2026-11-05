@@ -305,6 +305,17 @@ func main() {
 		if *videoAudio {
 			audioOut = os.Stderr
 		}
+		// Con WIBOX_AUDIO_FILE el audio G711A va a un fichero en vez de a
+		// stderr: asi se puede comprobar el formato con ffprobe sin mezclarlo
+		// con las trazas.
+		if path := os.Getenv("WIBOX_AUDIO_FILE"); path != "" {
+			f, ferr := os.Create(path)
+			if ferr != nil {
+				log.Fatalf("audio: %v", ferr)
+			}
+			defer f.Close()
+			audioOut = f
+		}
 		err = runVideo(cfg, d.auth.session, []byte(tok.DataEncodeKey), remotePlayPassword(tok), os.Stdout, audioOut)
 		if err != nil {
 			log.Fatalf("video: %v", err)

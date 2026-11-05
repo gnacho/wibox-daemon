@@ -117,7 +117,11 @@ func demuxMedia(payload []byte) []mediaFrame {
 		}
 		end := pos + 0x14 + hdr.PayloadLen
 		if end > len(payload) {
-			break
+			// El tamano de la cabecera QUII excluye el relleno AES, asi que
+			// el ultimo cpacket del paquete llega recortado hasta en 15
+			// bytes. Se usa lo que hay en vez de tirar el frame entero:
+			// medido, sin esto se perdian 12663 de 12797 paquetes.
+			end = len(payload)
 		}
 		bitstream := payload[pos+0x14 : end]
 		switch hdr.FrameType {

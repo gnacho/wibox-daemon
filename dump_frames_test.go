@@ -53,8 +53,10 @@ func TestDumpFrames(t *testing.T) {
 
 	var buf []byte
 	var all []byte
+	var audioAll []byte
 	var video, audio, keyFrames int
 	var first *mediaFrame
+	var firstAudio *mediaFrame
 	for _, chunk := range chunks {
 		buf = append(buf, chunk...)
 		frames, rest := consumeQuiiPackets(key, buf)
@@ -72,6 +74,10 @@ func TestDumpFrames(t *testing.T) {
 				}
 			} else {
 				audio++
+				audioAll = append(audioAll, fr.Bitstream...)
+				if firstAudio == nil {
+					firstAudio = &fr
+				}
 			}
 		}
 	}
@@ -92,6 +98,18 @@ func TestDumpFrames(t *testing.T) {
 	if out := os.Getenv("WIBOX_DUMP_H264"); out != "" {
 		if err := os.WriteFile(out, all, 0o644); err == nil {
 			t.Logf("volcado h264 en %s", out)
+		}
+	}
+	if firstAudio != nil {
+		// El audio del timbre es G711A (codec 4). Estas trazas sirven para
+		// comprobar la frecuencia y los canales antes de cablearlo a Home
+		// Assistant, sin depender de que el timbre este despierto.
+		t.Logf("audio=%d bytes codec=%d rate=%d canales=%d",
+			len(audioAll), firstAudio.Codec, firstAudio.SampleRate, firstAudio.Channels)
+		if out := os.Getenv("WIBOX_DUMP_AUDIO"); out != "" {
+			if err := os.WriteFile(out, audioAll, 0o644); err == nil {
+				t.Logf("volcado audio en %s", out)
+			}
 		}
 	}
 }

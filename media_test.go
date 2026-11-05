@@ -85,11 +85,15 @@ func TestDemuxIgnoresUnknownMarker(t *testing.T) {
 	}
 }
 
-func TestDemuxTruncatedPayloadStops(t *testing.T) {
+func TestDemuxTruncatedPayloadKeepsPartialFrame(t *testing.T) {
 	payload := buildCPacket(0xE0, 1, 100, 640, 480, []byte{0, 0, 1, 0x41, 0x22, 0x33})
 	cut := payload[:len(payload)-2] // el bitstream ya no cabe entero
-	if frames := demuxMedia(cut); len(frames) != 0 {
-		t.Fatalf("frames=%d, esperaba 0 con payload truncado", len(frames))
+	frames := demuxMedia(cut)
+	if len(frames) != 1 {
+		t.Fatalf("frames=%d, esperaba 1 recortado (el relleno AES se descarta)", len(frames))
+	}
+	if len(frames[0].Bitstream) == 0 {
+		t.Fatal("bitstream vacio")
 	}
 }
 
@@ -108,5 +112,22 @@ func TestContainsIDR(t *testing.T) {
 		if got := containsIDR(c.in); got != c.want {
 			t.Errorf("%s: got %v, want %v", c.name, got, c.want)
 		}
+	}
+}
+
+func TestDemuxKeepsTruncatedTail(t *testing.T) {
+	// El tamano de la cabecera QUII excluye el relleno AES, asi que el ultimo
+	// cpacket llega recortado hasta 15 bytes. Antes se tiraba entero y se
+	// perdian 12663 de 12797 paquetes de una sesion real.
+	bitstream := []byte{0x00, 0x00, 0x00, 0x01, 0x65, 0x11, 0x22, 0x33}
+	pkt := buildCPacket(0xE0, 1, 100, 352, 288, bitstream)
+	// Se recortan los ultimos 4 bytes, como en el flujo real.
+	short := pkt[:len(pkt)-4]
+	frames := demuxMedia(short)
+	if len(frames) != 1 {
+		t.Fatalf("frames=%d, se esperaba 1 con el ultimo cpacket recortado", len(frames))
+	}
+	if len(frames[0].Bitstream) == 0 {
+		t.Fatal("bitstream vacio")
 	}
 }
