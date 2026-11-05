@@ -285,10 +285,11 @@ func (d *daemon) routes() http.Handler {
 			"video_session": session,
 			"last_open":     d.lastOpenCopy(),
 		}
-		if session {
-			out["video_frames"] = frames
-			out["video_keyframes"] = keys
-		}
+		// Los contadores van siempre, a cero cuando no hay sesion, para que
+		// Home Assistant tenga los atributos fijos y una automatizacion no
+		// dependa de que el sensor cambie de forma.
+		out["video_frames"] = frames
+		out["video_keyframes"] = keys
 		d.writeJSON(w, 200, out)
 	})
 	mux.HandleFunc("/devices", func(w http.ResponseWriter, r *http.Request) {

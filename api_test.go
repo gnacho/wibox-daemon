@@ -213,6 +213,31 @@ func TestStatusRequiresToken(t *testing.T) {
 	}
 }
 
+func TestStatusReportsZeroCountersWithoutSession(t *testing.T) {
+	d := newTestDaemon(nil)
+	req, _ := http.NewRequest("GET", "/status", nil)
+	req.Header.Set("Authorization", "Bearer secreto")
+	w := httptest.NewRecorder()
+	d.routes().ServeHTTP(w, req)
+	if w.Code != 200 {
+		t.Fatalf("codigo %d", w.Code)
+	}
+	var got struct {
+		Session  bool `json:"video_session"`
+		Frames   int  `json:"video_frames"`
+		Keyframe int  `json:"video_keyframes"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Session {
+		t.Fatal("no hay sesion de video en el test")
+	}
+	if got.Frames != 0 || got.Keyframe != 0 {
+		t.Fatalf("contadores %d/%d, se esperaban cero", got.Frames, got.Keyframe)
+	}
+}
+
 func TestStatusReportsVideoFrames(t *testing.T) {
 	sock := t.TempDir() + "/video.sock"
 	srv, err := newControlServer(sock, func() (int, error) { return 0, nil }, func() (int, int) { return 120, 4 })
