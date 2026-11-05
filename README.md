@@ -343,6 +343,8 @@ as the doorbell, password rejection, setup with a bad status, LAN discovery, and
 the `/open` HTTP contract (token required, 200 with `ok`, 502 with the error
 code).
 
+Every release with its notes is listed in [CHANGELOG.md](CHANGELOG.md).
+
 ## Related projects
 
 - [wibox-android](https://github.com/gnacho/wibox-android): Android app (Kotlin)

@@ -340,6 +340,8 @@ socket de loopback que hace de timbre, rechazo de contrasena, setup con status
 malo, descubrimiento en LAN, y contrato HTTP de `/open` (token obligatorio, 200
 con `ok`, 502 con el codigo de error).
 
+Cada release con sus notas esta en [CHANGELOG.md](CHANGELOG.md).
+
 ## Proyectos relacionados
 
 - [wibox-android](https://github.com/gnacho/wibox-android): app Android (Kotlin)
