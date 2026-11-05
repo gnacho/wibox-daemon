@@ -70,6 +70,22 @@ rest:
         value_template: "{{ value_json.video_pending | default(0) }}"
         unit_of_measurement: "frames"
 
+  # Whether the cloud last saw the doorbell online. It sleeps on batteries, so
+  # this is the cheapest way to know if an opening has a chance right now.
+  - resource: "http://192.168.1.50:8087/status"
+    headers:
+      Authorization: "Bearer CAMBIA_EL_TOKEN"
+    scan_interval: 120
+    timeout: 30
+    sensor:
+      - name: "Wibox timbre"
+        unique_id: wibox_timbre_online
+        icon: mdi:doorbell
+        value_template: >-
+          {{ "online" if value_json.device_online else "dormido" }}
+        json_attributes:
+          - devices_checked
+
   # Health of the vendor cloud session: the daemon logs in on its own every
   # WIBOX_CLOUD_CHECK seconds, so a dead session shows up here before somebody
   # tries the door.
