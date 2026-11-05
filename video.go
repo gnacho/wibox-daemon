@@ -58,6 +58,8 @@ func consumeQuiiPacketsWith(key, buf []byte, onPacket func(*packet)) ([]mediaFra
 // SPS y PPS del timbre (H264 Main 352x288). Al engancharnos a mitad de stream no
 // llegan en el bitstream, y sin PPS el decodificador no arranca. Los valores son
 // los mismos que usa la app oficial, extraidos de un IDR real del propio timbre.
+const defaultVideoLock = "/tmp/wibox-video.lock"
+
 const (
 	defaultSPSHex = "474d401e99a05825a100000303e800009c4084"
 	defaultPPSHex = "48ee3c80"
@@ -85,6 +87,15 @@ func runVideo(cfg config, session string, key []byte, password string, out io.Wr
 	if len(key) != 32 {
 		return fmt.Errorf("data-encode-key de %d bytes, se esperaban 32", len(key))
 	}
+	lockPath := cfg.videoLock
+	if lockPath == "" {
+		lockPath = defaultVideoLock
+	}
+	release, lerr := acquireVideoLock(lockPath)
+	if lerr != nil {
+		return lerr
+	}
+	defer release()
 	s, err := establishRemote(cfg, session)
 	if err != nil {
 		return err

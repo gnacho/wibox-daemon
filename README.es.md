@@ -77,6 +77,7 @@ Todo por variables de entorno (o un fichero `EnvironmentFile` de systemd):
 | `WIBOX_LOG_FILE` | Escribe tambien el log en este fichero. Necesario dentro del add-on: go2rtc se queda con el stderr del hijo |
 | `WIBOX_CLOUD_CHECK` | Segundos entre comprobaciones del login contra el cloud, publicadas en `/status` (por defecto `600`, `0` lo desactiva) |
 | `WIBOX_VIDEO_MAX` | Tope duro de una sesion de video, en segundos (por defecto `900`, `0` lo desactiva) |
+| `WIBOX_VIDEO_LOCK` | Cerrojo que impide un segundo proceso de video sobre el timbre (por defecto `/tmp/wibox-video.lock`) |
 | `WIBOX_DEBUG` | Cualquier valor activa trazas HTTP y MQTT |
 
 La configuracion tambien se puede pasar con `-config <fichero>`. Asi es como lo

@@ -43,6 +43,9 @@ type config struct {
 	// controlSock es el socket donde el proceso de video atiende peticiones
 	// de apertura. Vacio = /tmp/wibox-video.sock.
 	controlSock string
+	// videoLock es el fichero de cerrojo del proceso de video: el timbre solo
+	// admite una sesion QUII, asi que no puede haber dos a la vez en el equipo.
+	videoLock string
 	// cloudCheck es cada cuanto se comprueba el login y la lista contra el
 	// cloud para publicarlo en /status. 0 lo desactiva.
 	cloudCheck time.Duration
@@ -91,6 +94,7 @@ func loadConfig() config {
 		remoteAttempts: attempts,
 		remotePoll:     time.Duration(poll) * time.Second,
 		cloudCheck:     time.Duration(cloudEvery) * time.Second,
+		videoLock:      env("WIBOX_VIDEO_LOCK", ""),
 		remoteBudget:   time.Duration(budget) * time.Second,
 		controlSock:    env("WIBOX_CONTROL_SOCK", ""),
 	}
