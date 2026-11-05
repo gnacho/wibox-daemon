@@ -53,6 +53,22 @@ rest:
           - last_open
           - video_frames
           - video_keyframes
+          - video_pending
+
+  # Frames the video process already received but cannot use until a keyframe
+  # arrives. Above zero means the doorbell is sending media and the picture is
+  # simply waiting for an IDR, which is a different problem from no media.
+  - resource: "http://192.168.1.50:8087/status"
+    headers:
+      Authorization: "Bearer CAMBIA_EL_TOKEN"
+    scan_interval: 120
+    timeout: 30
+    sensor:
+      - name: "Wibox video pendiente"
+        unique_id: wibox_video_pendiente
+        icon: mdi:image-off
+        value_template: "{{ value_json.video_pending | default(0) }}"
+        unit_of_measurement: "frames"
 
   # Health of the vendor cloud session: the daemon logs in on its own every
   # WIBOX_CLOUD_CHECK seconds, so a dead session shows up here before somebody
