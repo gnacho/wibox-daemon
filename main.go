@@ -428,8 +428,13 @@ func (d *daemon) routes() http.Handler {
 		// asi se distingue "hay media pero falta IDR" de "no llega nada".
 		out["video_pending"] = pending
 		// Si otro proceso de video tiene el cerrojo, la sesion local la lleva
-		// el y este proceso no puede abrir un tunel propio.
-		out["video_lock_free"] = videoLockFree(d.cfg.videoLock)
+		// el y este proceso no puede abrir un tunel propio. Su pid va aparte
+		// para poder mirarlo sin entrar en una shell.
+		free, holder := videoLockState(d.cfg.videoLock)
+		out["video_lock_free"] = free
+		if !free && holder > 0 {
+			out["video_lock_pid"] = holder
+		}
 		ok, cerr, at := d.cloudState()
 		out["cloud_ok"] = ok
 		// Vacio cuando no hay error, para que el atributo exista siempre y

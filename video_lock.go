@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"os"
+	"strconv"
+	"strings"
 	"syscall"
 )
 
@@ -20,10 +22,39 @@ func acquireVideoLock(path string) (func(), error) {
 		f.Close()
 		return nil, fmt.Errorf("ya hay otra sesion de video en este equipo (%s ocupado)", path)
 	}
+	// Se apunta el pid dentro del fichero: el cerrojo no lo guarda en ningun
+	// sitio y sin esto no hay forma de saber quien lo tiene desde /status.
+	if err := f.Truncate(0); err == nil {
+		if _, err := f.WriteAt([]byte(strconv.Itoa(os.Getpid())+"\n"), 0); err == nil {
+			f.Sync()
+		}
+	}
 	return func() {
 		syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
 		f.Close()
 	}, nil
+}
+
+// videoLockState devuelve si el cerrojo esta libre y, cuando no lo esta, el pid
+// que el dueno dejo escrito en el fichero (0 si no se pudo leer).
+func videoLockState(path string) (bool, int) {
+	if path == "" {
+		path = defaultVideoLock
+	}
+	release, err := acquireVideoLock(path)
+	if err == nil {
+		release()
+		return true, 0
+	}
+	raw, rerr := os.ReadFile(path)
+	if rerr != nil {
+		return false, 0
+	}
+	pid, perr := strconv.Atoi(strings.TrimSpace(string(raw)))
+	if perr != nil {
+		return false, 0
+	}
+	return false, pid
 }
 
 // videoLockFree dice si el cerrojo esta libre sin quedarselo: si otro proceso
