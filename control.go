@@ -90,6 +90,11 @@ func (s *controlServer) handle(conn net.Conn, unlock func() (int, error)) {
 		json.NewEncoder(conn).Encode(controlResponse{RC: -1, Error: "peticion ilegible"})
 		return
 	}
+	// ping solo confirma que hay una sesion de video viva: no abre nada.
+	if req.Command == "ping" {
+		json.NewEncoder(conn).Encode(controlResponse{OK: true})
+		return
+	}
 	if req.Command != "unlock" {
 		json.NewEncoder(conn).Encode(controlResponse{RC: -1, Error: "orden desconocida"})
 		return
@@ -111,6 +116,25 @@ func (s *controlServer) close() {
 	}
 	s.ln.Close()
 	os.Remove(s.path)
+}
+
+// controlPing dice si hay un proceso de video atendiendo el socket. No abre
+// nada y no toca la closure de apertura.
+func controlPing(path string) bool {
+	conn, err := net.DialTimeout("unix", controlSockPath(path), 300*time.Millisecond)
+	if err != nil {
+		return false
+	}
+	defer conn.Close()
+	conn.SetDeadline(time.Now().Add(2 * time.Second))
+	if err := json.NewEncoder(conn).Encode(controlRequest{Command: "ping"}); err != nil {
+		return false
+	}
+	var resp controlResponse
+	if err := json.NewDecoder(conn).Decode(&resp); err != nil {
+		return false
+	}
+	return resp.OK
 }
 
 // controlUnlock intenta abrir la puerta por la sesion de video en curso. El

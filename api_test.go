@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http/httptest"
 	"testing"
+	"time"
 )
 
 func newTestDaemon(open func(string) (int, string, error)) *daemon {
@@ -155,5 +156,55 @@ func TestOpenUsesVideoSession(t *testing.T) {
 	}
 	if body["ok"] != true {
 		t.Fatalf("respuesta %v", body)
+	}
+}
+
+// /status es lo que mira quien no ve el log: version, uptime, si hay sesion de
+// video viva y como fue la ultima apertura.
+func TestStatusReportsState(t *testing.T) {
+	d := newTestDaemon(func(string) (int, string, error) { return 0, "", nil })
+	d.started = time.Now().Add(-90 * time.Second)
+	d.recordOpen("dev-por-defecto", "remote", -10029, errors.New("contrasena de apertura rechazada"))
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/status", nil)
+	req.Header.Set("Authorization", "Bearer secreto")
+	d.routes().ServeHTTP(rec, req)
+	if rec.Code != 200 {
+		t.Fatalf("codigo %d: %s", rec.Code, rec.Body.String())
+	}
+	var got struct {
+		Service      string      `json:"service"`
+		Version      string      `json:"version"`
+		UptimeS      int         `json:"uptime_s"`
+		VideoSession bool        `json:"video_session"`
+		LastOpen     *openRecord `json:"last_open"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("json: %v", err)
+	}
+	if got.Service != "wibox-daemon" {
+		t.Fatalf("service=%q", got.Service)
+	}
+	if got.UptimeS < 90 {
+		t.Fatalf("uptime=%d, esperaba al menos 90", got.UptimeS)
+	}
+	if got.VideoSession {
+		t.Fatal("no hay proceso de video en el test")
+	}
+	if got.LastOpen == nil || got.LastOpen.Via != "remote" || got.LastOpen.RC != -10029 {
+		t.Fatalf("last_open=%+v", got.LastOpen)
+	}
+	if got.LastOpen.Error == "" {
+		t.Fatal("la ultima apertura fallida debe llevar el error")
+	}
+}
+
+func TestStatusRequiresToken(t *testing.T) {
+	d := newTestDaemon(func(string) (int, string, error) { return 0, "", nil })
+	rec := httptest.NewRecorder()
+	d.routes().ServeHTTP(rec, httptest.NewRequest("GET", "/status", nil))
+	if rec.Code != 401 {
+		t.Fatalf("codigo %d, esperaba 401", rec.Code)
 	}
 }

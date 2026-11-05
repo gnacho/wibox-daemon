@@ -90,6 +90,16 @@ func loadConfig() config {
 	}
 }
 
+// openRecord es la ultima apertura intentada, para /status y para las trazas
+// de HA cuando algo falla.
+type openRecord struct {
+	Device string    `json:"device"`
+	Via    string    `json:"via"`
+	RC     int       `json:"rc"`
+	Error  string    `json:"error,omitempty"`
+	At     time.Time `json:"at"`
+}
+
 type daemon struct {
 	cfg  config
 	auth *UserAuth
@@ -97,6 +107,30 @@ type daemon struct {
 
 	// openFunc permite sustituir la apertura en los tests.
 	openFunc func(deviceID string) (int, string, error)
+
+	started  time.Time
+	statusMu sync.Mutex
+	lastOpen *openRecord
+}
+
+func (d *daemon) recordOpen(deviceID, via string, rc int, err error) {
+	d.statusMu.Lock()
+	defer d.statusMu.Unlock()
+	rec := &openRecord{Device: deviceID, Via: via, RC: rc, At: time.Now().UTC()}
+	if err != nil {
+		rec.Error = err.Error()
+	}
+	d.lastOpen = rec
+}
+
+func (d *daemon) lastOpenCopy() *openRecord {
+	d.statusMu.Lock()
+	defer d.statusMu.Unlock()
+	if d.lastOpen == nil {
+		return nil
+	}
+	cp := *d.lastOpen
+	return &cp
 }
 
 func (d *daemon) open(deviceID string) (int, string, error) {
@@ -183,6 +217,7 @@ func (d *daemon) openDoor(deviceID string) (int, string, error) {
 		if err == nil {
 			defer client.Close()
 			rc, err := client.Unlock(d.cfg.pin, 1, 1)
+			d.recordOpen(deviceID, "lan", rc, err)
 			return rc, token.Expired, err
 		}
 		log.Printf("lan no: %v, se prueba la via remota", err)
@@ -191,6 +226,7 @@ func (d *daemon) openDoor(deviceID string) (int, string, error) {
 		return -1, "", fmt.Errorf("sin via local y la remota esta desactivada (WIBOX_REMOTE=0)")
 	}
 	rc, err := remoteOpen(d.cfg, d.auth.session, key, password)
+	d.recordOpen(deviceID, "remote", rc, err)
 	return rc, token.Expired, err
 }
 
@@ -232,6 +268,19 @@ func (d *daemon) routes() http.Handler {
 	})
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		d.writeJSON(w, 200, map[string]any{"ok": true})
+	})
+	mux.HandleFunc("/status", func(w http.ResponseWriter, r *http.Request) {
+		if !d.authOK(r) {
+			d.writeJSON(w, 401, map[string]any{"error": "unauthorized"})
+			return
+		}
+		d.writeJSON(w, 200, map[string]any{
+			"service":       "wibox-daemon",
+			"version":       version,
+			"uptime_s":      int(time.Since(d.started).Seconds()),
+			"video_session": controlPing(d.cfg.controlSock),
+			"last_open":     d.lastOpenCopy(),
+		})
 	})
 	mux.HandleFunc("/devices", func(w http.ResponseWriter, r *http.Request) {
 		if !d.authOK(r) {
@@ -291,7 +340,7 @@ func main() {
 
 	cfg := loadConfig()
 	clientID = cfg.clientID
-	d := &daemon{cfg: cfg, auth: NewUserAuth(cfg.baseURL, cfg.clientID)}
+	d := &daemon{cfg: cfg, auth: NewUserAuth(cfg.baseURL, cfg.clientID), started: time.Now()}
 
 	if *decodePath != "" {
 		if cfg.deviceID == "" {

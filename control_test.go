@@ -124,3 +124,30 @@ var errPinRejected = &pinRejectedError{}
 type pinRejectedError struct{}
 
 func (e *pinRejectedError) Error() string { return "contrasena de apertura rechazada" }
+
+// ping solo comprueba que hay sesion de video: no debe ejecutar la apertura.
+func TestControlPingDoesNotUnlock(t *testing.T) {
+	path := testSockPath(t)
+	calls := 0
+	srv, err := newControlServer(path, func() (int, error) {
+		calls++
+		return 0, nil
+	})
+	if err != nil {
+		t.Fatalf("servidor: %v", err)
+	}
+	defer srv.close()
+
+	if !controlPing(path) {
+		t.Fatal("el ping deberia encontrar la sesion de video")
+	}
+	if calls != 0 {
+		t.Fatalf("el ping abrio la puerta %d veces", calls)
+	}
+}
+
+func TestControlPingWithoutServer(t *testing.T) {
+	if controlPing(testSockPath(t)) {
+		t.Fatal("sin servidor el ping debe ser falso")
+	}
+}

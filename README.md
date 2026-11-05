@@ -229,8 +229,8 @@ talks outwards.
 
 ## Protocol
 
-The details are in `docs/protocol.md` in the Android app repo
-(`gnacho/wibox-android`). Summary of what this daemon implements:
+The full wire protocol is in [`docs/protocol.md`](docs/protocol.md). Summary of
+what this daemon implements:
 
 1. **userauth duplex**: `GET /auth/nologin;jus_duplex=down` only to get the
    `jsessionid` cookie, `POST /auth/nologin;jus_duplex=up` with the XML
