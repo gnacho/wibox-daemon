@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/binary"
 	"io"
 )
@@ -206,6 +207,19 @@ func (m *tsMuxer) WriteAudio(ptsMS int64, alaw []byte) error {
 		return err
 	}
 	return m.writePES(m.audioPID, 0xC0, m.ptsFor(m.audioPID, ptsMS), alaw)
+}
+
+// alawSilence es un frame de silencio G711A: 160 muestras de 8 kHz, o sea
+// 20 ms. Se manda uno al principio para que el PMT y la realidad coincidan.
+var alawSilence = bytes.Repeat([]byte{0xD5}, 160)
+
+// WriteOpeningAudio anuncia la pista de audio con un frame de silencio. Hace
+// falta porque go2rtc sondea el MPEG-TS esperando un paquete de cada tipo que
+// el PMT declare: si el sonido se anuncia y no llega nunca, el sondeo no
+// termina hasta que el timbre manda media de verdad, y el RTSP no responde
+// mientras tanto.
+func (m *tsMuxer) WriteOpeningAudio() error {
+	return m.WriteAudio(0, alawSilence)
 }
 
 func (m *tsMuxer) writeHeaderIfNeeded() error {

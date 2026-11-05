@@ -133,6 +133,15 @@ func runVideo(cfg config, session string, key []byte, password string, out io.Wr
 	if err := writeParams(0); err != nil {
 		return fmt.Errorf("escribiendo cabecera del stream: %w", err)
 	}
+	// go2rtc sondea el pipe esperando un paquete de cada tipo que anuncie el
+	// PMT: con la pista de audio declarada y sin un solo paquete suyo, el
+	// sondeo no termina hasta que el timbre manda media, y mientras tanto su
+	// RTSP no contesta ni un DESCRIBE. Un frame de silencio lo cierra.
+	if ts != nil {
+		if err := ts.WriteOpeningAudio(); err != nil {
+			return fmt.Errorf("escribiendo el silencio inicial: %w", err)
+		}
+	}
 
 	s, err := establishRemote(cfg, session)
 	if err != nil {
