@@ -217,12 +217,15 @@ Home Assistant ya no acepta una camara generica por YAML y el config flow valida
 abriendo el stream, asi que la entrada solo se puede crear cuando el stream
 lleva un keyframe. `deploy/camera-creation.md` tiene las llamadas exactas,
 incluido el bloque `advanced` obligatorio.
-`deploy/create-camera-when-ready.sh` hace la espera por ti: consulta
-`/status`, imprime `video_pending` en cada ronda para distinguir un timbre
-dormido de un stream sin imagen, y crea la entrada la primera vez que
-`video_keyframes` pasa de cero. Es idempotente, y mientras espera mantiene una tirada del stream con `ffmpeg`
-(salvo `PULL=0`), porque sin consumidor go2rtc no arranca el productor y el
-timbre no tiene a quien mandar nada.
+El daemon crea la entrada por si mismo cuando tiene `WIBOX_HA_URL`,
+`WIBOX_HA_TOKEN` y `WIBOX_HA_STREAM` (en el add-on, las opciones `ha_url`,
+`ha_token` y `ha_stream`). Mira `/status` cada minuto y crea la camara generica
+la primera vez que `video_keyframes` pasa de cero, asi que la entrada aparece
+en cuanto el timbre manda imagen, sin nada mas corriendo.
+`deploy/create-camera-when-ready.sh` sigue como respaldo y, sobre todo, por su
+tirada RTSP: mientras espera mantiene un `ffmpeg` corto enganchado (salvo
+`PULL=0`), porque sin consumidor go2rtc no arranca el productor y el timbre no
+tiene a quien mandar frames.
 
 ## Add-on de Home Assistant
 
