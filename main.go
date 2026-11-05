@@ -8,10 +8,12 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
 	"runtime"
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -519,10 +521,6 @@ func main() {
 		if err := d.login(); err != nil {
 			log.Fatalf("login: %v", err)
 		}
-		tok, err := d.auth.DeviceToken(cfg.deviceID)
-		if err != nil {
-			log.Fatalf("token: %v", err)
-		}
 		var audioOut io.Writer
 		if *videoAudio {
 			audioOut = os.Stderr
@@ -538,8 +536,35 @@ func main() {
 			defer f.Close()
 			audioOut = f
 		}
-		err = runVideo(cfg, d.auth.session, []byte(tok.DataEncodeKey), remotePlayPassword(tok), os.Stdout, audioOut)
-		if err != nil {
+		// go2rtc solo lanza el productor mientras hay alguien mirando, pero
+		// si el timbre se duerme a mitad de sesion el proceso muere y el
+		// espectador se queda sin imagen. El bucle reintenta con credenciales
+		// frescas hasta que lo paren.
+		sigs := make(chan os.Signal, 1)
+		signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
+		stop := make(chan struct{})
+		go func() {
+			<-sigs
+			close(stop)
+		}()
+		fetch := func() (*videoCreds, error) {
+			if err := d.login(); err != nil {
+				return nil, err
+			}
+			fresh, terr := d.auth.DeviceToken(cfg.deviceID)
+			if terr != nil {
+				return nil, terr
+			}
+			if len(fresh.DataEncodeKey) != 32 {
+				return nil, fmt.Errorf("data-encode-key de %d bytes, se esperaban 32", len(fresh.DataEncodeKey))
+			}
+			return &videoCreds{
+				Session:  d.auth.session,
+				Key:      []byte(fresh.DataEncodeKey),
+				Password: remotePlayPassword(fresh),
+			}, nil
+		}
+		if err := runVideoLoop(cfg, fetch, os.Stdout, audioOut, stop); err != nil {
 			log.Fatalf("video: %v", err)
 		}
 		return
