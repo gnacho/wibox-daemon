@@ -231,6 +231,28 @@ func runVideo(cfg config, session string, key []byte, password string, out io.Wr
 			var frames []mediaFrame
 			frames, buf = consumeQuiiPackets(key, buf)
 			for _, f := range frames {
+				// El audio no depende de un keyframe: se emite desde el
+				// principio, asi se oye al visitante aunque el IDR tarde.
+				if !f.Video {
+					if audioOut != nil && len(f.Bitstream) > 0 {
+						if ts != nil {
+							if aerr := ts.WriteAudio(f.TimestampMS, f.Bitstream); aerr != nil {
+								return fmt.Errorf("escribiendo audio: %w", aerr)
+							}
+						} else if _, aerr := audioOut.Write(f.Bitstream); aerr != nil {
+							return fmt.Errorf("escribiendo audio: %w", aerr)
+						}
+						audioFrames++
+					}
+					if !waitTimer.Stop() {
+						select {
+						case <-waitTimer.C:
+						default:
+						}
+					}
+					waitTimer.Reset(videoWait)
+					continue
+				}
 				if f.Video {
 					countNALTypes(f.Bitstream, nalCensus)
 					if waitingIDR && !f.KeyFrame {
@@ -298,16 +320,6 @@ func runVideo(cfg config, session string, key []byte, password string, out io.Wr
 					}
 					waitTimer.Reset(videoWait)
 					continue
-				}
-				if audioOut != nil && len(f.Bitstream) > 0 {
-					if ts != nil {
-						if err := ts.WriteAudio(f.TimestampMS, f.Bitstream); err != nil {
-							return fmt.Errorf("escribiendo audio: %w", err)
-						}
-					} else if _, err := audioOut.Write(f.Bitstream); err != nil {
-						return fmt.Errorf("escribiendo audio: %w", err)
-					}
-					audioFrames++
 				}
 			}
 			// Si el timbre deja de emitir, se corta en vez de quedarse colgado
