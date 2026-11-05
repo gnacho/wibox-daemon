@@ -12,10 +12,13 @@ curl -s -H "Authorization: Bearer $WIBOX_API_TOKEN" \
   http://192.168.1.244:8087/status
 ```
 
-`video_keyframes` has to be greater than zero. If it is zero the stream is
-carrying audio only (the doorbell is awake but has not sent a keyframe yet,
-which can take around 90 s of stream), and the config flow will answer
-`{"stream_source": "timeout"}`.
+`video_keyframes` has to be greater than zero. If it is zero the config flow
+answers `{"stream_source": "timeout"}`.
+
+The two counters tell different stories. `video_pending` above zero means the
+doorbell is already sending media and the only thing missing is a keyframe, so
+the stream is alive and worth waiting for. `video_keyframes` above zero means
+there is a picture, which is what the flow needs.
 
 You can keep the stream alive from another shell while this runs:
 
@@ -61,9 +64,11 @@ moment and create the entry once:
 
 ```sh
 while :; do
-  keys=$(curl -s -H "Authorization: Bearer $WIBOX_API_TOKEN" \
-    http://192.168.1.244:8087/status \
-    | python3 -c 'import json,sys; print(json.load(sys.stdin)["video_keyframes"])')
+  status=$(curl -s -H "Authorization: Bearer $WIBOX_API_TOKEN" \
+    http://192.168.1.244:8087/status)
+  keys=$(printf '%s' "$status" | python3 -c 'import json,sys; print(json.load(sys.stdin)["video_keyframes"])')
+  pending=$(printf '%s' "$status" | python3 -c 'import json,sys; print(json.load(sys.stdin)["video_pending"])')
+  echo "keyframes=$keys pending=$pending"
   [ "$keys" -gt 0 ] && break
   sleep 60
 done
