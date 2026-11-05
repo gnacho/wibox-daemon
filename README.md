@@ -219,12 +219,16 @@ Home Assistant no longer takes a generic camera in YAML and the config flow
 validates by opening the stream, so the entry can only be created once the
 stream carries a keyframe. `deploy/camera-creation.md` has the exact calls,
 including the mandatory `advanced` block.
-`deploy/create-camera-when-ready.sh` does the waiting for you: it polls
-`/status`, prints `video_pending` each round so a sleeping doorbell is easy to
-tell from a stream without a picture, and creates the entry the first time
-`video_keyframes` moves above zero. It is idempotent, and while it waits it keeps an RTSP pull alive with `ffmpeg`
-(unless you set `PULL=0`), because without a consumer go2rtc never starts the
-producer and the bell has nobody to send to.
+The daemon creates the entry by itself when it has `WIBOX_HA_URL`,
+`WIBOX_HA_TOKEN` and `WIBOX_HA_STREAM` (in the add-on, the `ha_url`, `ha_token`
+and `ha_stream` options). It checks `/status` every minute and creates the
+generic camera the first time `video_keyframes` moves above zero, so the entry
+appears the moment the bell sends a picture, without anything else running.
+
+`deploy/create-camera-when-ready.sh` is still there as a fallback, and mostly
+for its RTSP pull: while it waits it keeps a short `ffmpeg` pull alive (unless
+you set `PULL=0`), because without a consumer go2rtc never starts the producer
+and the bell has nobody to send frames to.
 
 ## Home Assistant add-on
 
