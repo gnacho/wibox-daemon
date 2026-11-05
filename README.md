@@ -50,6 +50,12 @@ Tested with Go 1.27 on `linux/amd64`. It also builds for arm64:
 GOARCH=arm64 go build -o wibox-daemon-arm64 .
 ```
 
+There is a `Makefile` with the same commands, so the version and the binaries
+cannot drift apart: `make check` runs gofmt, vet and the tests, `make race` adds
+the race detector, `make cover` prints the coverage, `make build` writes the
+local binary and `make release` writes both architectures into `dist/` with the
+version read from `wibox/config.yaml`.
+
 ## Configuration
 
 Everything through environment variables (or a systemd `EnvironmentFile`):
