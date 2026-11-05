@@ -28,6 +28,10 @@ STILL=$WIBOX_API/health
 POLL=${POLL:-60}
 MAX_ROUNDS=${MAX_ROUNDS:-0}
 
+log() {
+  printf '%s %s\n' "$(date -Is)" "$*"
+}
+
 hass() {
   local method=$1 path=$2 body=${3:-}
   if [ -n "$body" ]; then
@@ -49,7 +53,7 @@ already() {
 create() {
   flow=$(hass POST /api/config/config_entries/flow '{"handler":"generic"}' | jq -r '.flow_id // empty')
   if [ -z "$flow" ]; then
-    echo "no se pudo abrir el flujo generic"
+    log "no se pudo abrir el flujo generic"
     return 1
   fi
   body=$(jq -n --arg s "$STREAM" --arg i "$STILL" '{
@@ -68,22 +72,22 @@ while :; do
   status=$(curl -s -m 20 -H "Authorization: Bearer $WIBOX_TOKEN" "$WIBOX_API/status")
   keys=$(printf '%s' "$status" | jq -r '.video_keyframes // 0' 2>/dev/null || echo 0)
   pending=$(printf '%s' "$status" | jq -r '.video_pending // 0' 2>/dev/null || echo 0)
-  echo "ronda $round: keyframes=$keys pendientes=$pending"
+  log "ronda $round: keyframes=$keys pendientes=$pending"
 
   if [ "${keys:-0}" -gt 0 ] 2>/dev/null; then
     if already; then
-      echo "la camara ya estaba creada"
+      log "la camara ya estaba creada"
       exit 0
     fi
     if create; then
-      echo "camara creada"
+      log "camara creada"
       exit 0
     fi
-    echo "el alta fallo, se reintenta en la proxima ronda"
+    log "el alta fallo, se reintenta en la proxima ronda"
   fi
 
   if [ "$MAX_ROUNDS" -gt 0 ] && [ "$round" -ge "$MAX_ROUNDS" ]; then
-    echo "sin imagen en $round rondas"
+    log "sin imagen en $round rondas"
     exit 1
   fi
   sleep "$POLL"
