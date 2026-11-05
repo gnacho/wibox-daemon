@@ -67,8 +67,8 @@ Todo por variables de entorno (o un fichero `EnvironmentFile` de systemd):
 | `WIBOX_BASE_URL` | Cloud del fabricante |
 | `WIBOX_REMOTE` | `0` desactiva la via remota (por defecto activada) |
 | `WIBOX_REMOTE_ONLY` | `1` salta la via local aunque haya `WIBOX_LAN_ADDR` |
-| `WIBOX_REMOTE_ATTEMPTS` |
-| `WIBOX_REMOTE_BUDGET` | Segundos que el daemon sigue buscando el timbre antes de rendirse (por defecto `240`) | Intentos de `p2pconnect` (por defecto `20`, 12 s cada uno) |
+| `WIBOX_REMOTE_ATTEMPTS` | Intentos de `p2pconnect` (por defecto `20`, 12 s cada uno) |
+| `WIBOX_REMOTE_BUDGET` | Segundos que el daemon sigue buscando el timbre antes de rendirse (por defecto `240`) |
 | `WIBOX_AWAKE_POLL` | Segundos entre sondeos con el timbre dormido (por defecto `3`) |
 | `WIBOX_VIDEO_WAIT` | Segundos sin frames antes de cortar el video (por defecto `20`) |
 | `WIBOX_MPEGTS` | `1` muxea video y audio G.711A en MPEG-TS, para que un solo pipe `exec:` lleve los dos |
@@ -229,7 +229,8 @@ instalar "Wibox Doorbell"
 Opciones: cuenta, contrasena, client id, id del dispositivo, pin de apertura y
 token de la API. Los tiempos se ajustan desde la propia pagina del add-on:
 `attempts`, `awake_poll`, `video_wait`, `video_max`, `play_resends`,
-`cloud_check`, `open_cooldown` y `video_retry`. El add-on fuerza la cadena
+`cloud_check`, `open_cooldown`, `video_retry`, `video_retry_max`,
+`remote_budget` y `video_start_timeout`. El add-on fuerza la cadena
 remota, asi que no se configura direccion local.
 
 Desde Home Assistant:

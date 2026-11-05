@@ -230,8 +230,9 @@ install "Wibox Doorbell"
 
 Options, all of them adjustable from the add-on page: account, password,
 client id, device id, opening pin and API token; `attempts`, `awake_poll`,
-`video_wait`, `video_max`, `play_resends`, `cloud_check`, `open_cooldown` and
-`video_retry` for the timings. The add-on forces the remote chain, so no LAN
+`video_wait`, `video_max`, `play_resends`, `cloud_check`, `open_cooldown`,
+`video_retry`, `video_retry_max`, `remote_budget` and `video_start_timeout` for
+the timings. The add-on forces the remote chain, so no LAN
 address is configured.
 
 From Home Assistant:
