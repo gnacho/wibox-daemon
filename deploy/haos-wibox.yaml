@@ -17,6 +17,14 @@ rest_command:
     # Generous on purpose: the doorbell sleeps on batteries and the daemon
     # spends about four minutes looking for it before giving up.
     timeout: 300
+  # Same opening without the wait: answers 503 straight away when the last
+  # cloud check saw the doorbell asleep, so an automation is not blocked.
+  wibox_abrir_ya:
+    url: "http://192.168.1.50:8087/open?device=DEVICE_ID&wait=0"
+    method: GET
+    headers:
+      Authorization: "Bearer CAMBIA_EL_TOKEN"
+    timeout: 30
 
 rest:
   - resource: "http://192.168.1.50:8087/devices"
@@ -111,6 +119,11 @@ template:
         icon: mdi:door-open
         press:
           - action: rest_command.wibox_abrir
+      - name: "Wibox abrir ya"
+        unique_id: wibox_abrir_boton_ya
+        icon: mdi:door-open
+        press:
+          - action: rest_command.wibox_abrir_ya
 
 # The camera cannot be declared here: in current Home Assistant the generic
 # camera is a config entry that validates the stream while creating it. See
