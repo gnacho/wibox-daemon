@@ -35,10 +35,13 @@ done
 WIBOX_REMOTE=1
 WIBOX_REMOTE_ONLY=1
 WIBOX_API_PORT=8087
+# Un solo pipe para go2rtc: video y audio G711A en el mismo MPEG-TS.
+WIBOX_MPEGTS=1
 
 export WIBOX_ACCOUNT WIBOX_PASSWORD WIBOX_CLIENT_ID WIBOX_DEVICE_ID
 export WIBOX_UNLOCK_PASSWORD WIBOX_API_TOKEN WIBOX_REMOTE WIBOX_REMOTE_ONLY
 export WIBOX_API_PORT WIBOX_REMOTE_ATTEMPTS WIBOX_AWAKE_POLL WIBOX_VIDEO_WAIT
+export WIBOX_MPEGTS
 
 echo "wibox: cuenta ${WIBOX_ACCOUNT}, dispositivo ${WIBOX_DEVICE_ID}, API en el puerto ${WIBOX_API_PORT}"
 
@@ -55,7 +58,7 @@ fi
 
 cat > "$G2R_CONFIG" <<'YAML'
 streams:
-  wibox: exec:/usr/bin/wibox-daemon -video#killsignal=2#killtimeout=15#starttimeout=600
+  wibox: exec:/usr/bin/wibox-daemon -video -video-audio#killsignal=2#killtimeout=15#starttimeout=600
 api:
   listen: "127.0.0.1:1985"
 rtsp:

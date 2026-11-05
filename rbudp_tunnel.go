@@ -698,6 +698,20 @@ func (t *rbTunnel) sendQuiiSetup() error {
 func (t *rbTunnel) sendQuiiPlay() error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
+	return t.sendQuiiPlayLocked(1)
+}
+
+// sendQuiiPlayAgain reenvia el play con una secuencia nueva. Con la misma
+// secuencia el timbre lo descarta como duplicado y no reinicia el stream, que
+// es lo unico que provoca un IDR nuevo. Medido: 21 reenvios con seq 1 y cero
+// keyframes.
+func (t *rbTunnel) sendQuiiPlayAgain() error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.sendQuiiPlayLocked(t.quiiNextSeq)
+}
+
+func (t *rbTunnel) sendQuiiPlayLocked(seq uint32) error {
 	if t.quiiDestID == 0 {
 		return fmt.Errorf("sin destino KCP todavia")
 	}
@@ -714,7 +728,7 @@ func (t *rbTunnel) sendQuiiPlay() error {
 	if err != nil {
 		return err
 	}
-	t.sendWrappedData(packet, 1, rbPlayTag)
+	t.sendWrappedData(packet, seq, rbPlayTag)
 	t.quiiPlaySent = true
 	// El ack del timbre trae este id como remote-id, asi que se guarda para
 	// reconocerlo: su status no tiene constante propia.

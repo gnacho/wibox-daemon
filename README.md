@@ -21,7 +21,8 @@ at hand.
   inside the tunnel. No manufacturer SDK (which only ships for arm64) and no
   phone involved.
 - Remote H.264 Annex-B video on stdout, so go2rtc can hand it to Home
-  Assistant. Optional G.711A audio on stderr.
+  Assistant. Optional G.711A audio, either on stderr or muxed together with the
+  video into a single MPEG-TS stream (`WIBOX_MPEGTS=1`).
 - Doorbell discovery on the local network (`-discover`): scans the QUII port
   in the machine's /24s and runs the setup against every candidate.
 - Token-protected HTTP API: `/health`, `/devices`, `/open`.
@@ -71,6 +72,9 @@ Everything through environment variables (or a systemd `EnvironmentFile`):
 | `WIBOX_REMOTE_ATTEMPTS` | `p2pconnect` attempts (defaults to `20`, 12 s each) |
 | `WIBOX_AWAKE_POLL` | Seconds between probes while the doorbell sleeps (defaults to `3`) |
 | `WIBOX_VIDEO_WAIT` | Seconds without frames before cutting the video (defaults to `20`) |
+| `WIBOX_MPEGTS` | `1` muxes video and G.711A audio into MPEG-TS, so one `exec:` pipe carries both |
+| `WIBOX_AUDIO_FILE` | Writes the raw G.711A audio to that file instead of stderr |
+| `WIBOX_PLAY_RESENDS` | Times the play is resent while waiting for a keyframe (defaults to `3`, `0` disables it) |
 | `WIBOX_DEBUG` | Any value enables HTTP and MQTT traces |
 
 A configuration file can also be passed with `-config <file>`. That is how
@@ -147,9 +151,13 @@ Then add it to Home Assistant as a generic camera pointing at
   asleep, the process spends its time in the `p2pconnect` retry loop, so it is
   better to open the stream on demand (a dashboard tap) than to leave it
   always-on.
-- Audio is G.711A (PCMA) and `-video-audio` writes it to stderr, so getting it
-  into the same stream needs a second `ffmpeg` source in go2rtc rather than the
-  `exec:` pipe.
+- Audio is G.711A (PCMA). With `WIBOX_MPEGTS=1` the daemon writes MPEG-TS with
+  both tracks on stdout (H.264 with stream type `0x1B`, A-law with `0x90`), which
+  is what the add-on uses: go2rtc maps `0x90` to its PCMA codec. Without the flag
+  `-video-audio` writes the audio to stderr and a second `ffmpeg` source would be
+  needed, because go2rtc treats two `exec:` sources as failover, not as a merge.
+  Note that `ffprobe` does not recognise A-law inside MPEG-TS (ffmpeg itself
+  writes it as stream type `0x06`), so it is not a valid gate for that track.
 
 ## Home Assistant add-on
 

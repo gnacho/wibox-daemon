@@ -146,8 +146,31 @@ func runVideo(cfg config, session string, key []byte, password string, out io.Wr
 	// slices no sirven para nada. Se espera al keyframe y entonces se escribe
 	// SPS+PPS+IDR de una tacada.
 	params := annexBParams()
+	// Con WIBOX_MPEGTS la salida es un MPEG-TS con las dos pistas, que es la
+	// unica forma de que go2rtc reciba imagen y sonido por el mismo pipe: dos
+	// fuentes exec no se mezclan, se tratan como failover.
+	var ts *tsMuxer
+	if v := os.Getenv("WIBOX_MPEGTS"); v != "" && v != "0" {
+		ts = newTSMuxer(out)
+		log.Printf("video: salida MPEG-TS con pistas H264 y G711A")
+	}
 	waitingIDR := true
+	nalCensus := map[int]int{}
 	skipped := 0
+	// El timbre emite un IDR al arrancar el stream, asi que enganchados a mitad
+	// de GOP se pueden pasar minutos sin keyframe. Reenviar el play reinicia el
+	// stream y provoca uno nuevo (es lo que hace la app propia en resendPlay).
+	playResends := 0
+	maxPlayResends := 3
+	// Con WIBOX_PLAY_RESENDS=0 no se reenvia el play: el reenvio reinicia el
+	// stream y puede resetear el contador del GOP, asi que para dejar que el
+	// timbre llegue a su keyframe hay que poder desactivarlo.
+	if v := os.Getenv("WIBOX_PLAY_RESENDS"); v != "" {
+		if n, nerr := strconv.Atoi(v); nerr == nil && n >= 0 {
+			maxPlayResends = n
+		}
+	}
+	lastResend := time.Now()
 	var buf []byte
 	var videoFrames, audioFrames, keyFrames int
 	var rawBytes, rawMark int
@@ -209,10 +232,22 @@ func runVideo(cfg config, session string, key []byte, password string, out io.Wr
 			frames, buf = consumeQuiiPackets(key, buf)
 			for _, f := range frames {
 				if f.Video {
+					countNALTypes(f.Bitstream, nalCensus)
 					if waitingIDR && !f.KeyFrame {
 						skipped++
 						if skipped <= 5 || skipped%100 == 0 {
-							log.Printf("video: esperando keyframe, %d frames saltados", skipped)
+							log.Printf("video: esperando keyframe, %d frames saltados, censo NAL %v", skipped, nalCensus)
+						}
+						// Sin keyframe no hay nada que decodificar: se pide un
+						// reinicio del stream cada 10 s, unas pocas veces.
+						if playResends < maxPlayResends && time.Since(lastResend) > 10*time.Second {
+							playResends++
+							lastResend = time.Now()
+							if perr := t.sendQuiiPlayAgain(); perr != nil {
+								log.Printf("video: no se pudo reenviar el play: %v", perr)
+							} else {
+								log.Printf("video: play reenviado (%d/%d) para forzar un keyframe", playResends, maxPlayResends)
+							}
 						}
 						if !waitTimer.Stop() {
 							select {
@@ -226,12 +261,20 @@ func runVideo(cfg config, session string, key []byte, password string, out io.Wr
 					}
 					if waitingIDR {
 						waitingIDR = false
-						if _, err := out.Write(params); err != nil {
+						if ts != nil {
+							if err := ts.WriteVideo(f.TimestampMS, params); err != nil {
+								return fmt.Errorf("escribiendo SPS/PPS: %w", err)
+							}
+						} else if _, err := out.Write(params); err != nil {
 							return fmt.Errorf("escribiendo SPS/PPS: %w", err)
 						}
 						log.Printf("video: primer keyframe tras %d frames saltados, SPS/PPS inyectados", skipped)
 					}
-					if _, err := out.Write(f.Bitstream); err != nil {
+					if ts != nil {
+						if err := ts.WriteVideo(f.TimestampMS, f.Bitstream); err != nil {
+							return fmt.Errorf("escribiendo video: %w", err)
+						}
+					} else if _, err := out.Write(f.Bitstream); err != nil {
 						return fmt.Errorf("escribiendo video: %w", err)
 					}
 					videoFrames++
@@ -244,7 +287,8 @@ func runVideo(cfg config, session string, key []byte, password string, out io.Wr
 							f.Width, f.Height, f.FPS, f.Codec, f.KeyFrame)
 					}
 					if videoFrames%100 == 0 {
-						log.Printf("video: %d frames (%d key) audio=%d", videoFrames, keyFrames, audioFrames)
+						log.Printf("video: %d frames (%d key) audio=%d censo NAL %v",
+							videoFrames, keyFrames, audioFrames, nalCensus)
 					}
 					if !waitTimer.Stop() {
 						select {
@@ -256,7 +300,11 @@ func runVideo(cfg config, session string, key []byte, password string, out io.Wr
 					continue
 				}
 				if audioOut != nil && len(f.Bitstream) > 0 {
-					if _, err := audioOut.Write(f.Bitstream); err != nil {
+					if ts != nil {
+						if err := ts.WriteAudio(f.TimestampMS, f.Bitstream); err != nil {
+							return fmt.Errorf("escribiendo audio: %w", err)
+						}
+					} else if _, err := audioOut.Write(f.Bitstream); err != nil {
 						return fmt.Errorf("escribiendo audio: %w", err)
 					}
 					audioFrames++

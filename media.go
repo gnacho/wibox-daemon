@@ -160,6 +160,31 @@ func demuxMedia(payload []byte) []mediaFrame {
 }
 
 // containsIDR busca un NAL de tipo 5 (IDR) dentro del bitstream.
+// countNALTypes acumula los tipos de NAL (campo de 5 bits tras el start code)
+// del bitstream, para poder decir si el flujo trae PPS (8) o IDR (5) sin
+// tener que analizar el fichero a mano.
+func countNALTypes(b []byte, acc map[int]int) {
+	for i := 0; i+3 <= len(b); i++ {
+		if b[i] != 0 || b[i+1] != 0 {
+			continue
+		}
+		startLen := 0
+		if b[i+2] == 1 {
+			startLen = 3
+		} else if b[i+2] == 0 && i+4 <= len(b) && b[i+3] == 1 {
+			startLen = 4
+		}
+		if startLen == 0 {
+			continue
+		}
+		nal := i + startLen
+		if nal < len(b) {
+			acc[int(b[nal]&0x1F)]++
+		}
+		i += startLen
+	}
+}
+
 func containsIDR(b []byte) bool {
 	for i := 0; i+4 <= len(b); i++ {
 		if b[i] != 0 || b[i+1] != 0 {
