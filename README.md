@@ -100,6 +100,19 @@ Note: the doorbell only answers when the daemon runs on the same network as the
 doorbell. From another network the scan finds nothing, and that is not a daemon
 failure.
 
+## Talking to the visitor (LAN only)
+
+The doorbell has a speaker, but only on its local network: the cloud tunnel
+carries video and the audio from the bell, never audio towards it.
+
+```sh
+ffmpeg -i mensaje.wav -ar 8000 -ac 1 -f wav -c:a pcm_s16le /tmp/mensaje8k.wav
+WIBOX_LAN_ADDR=192.168.1.60:34567 ./wibox-daemon -talk /tmp/mensaje8k.wav
+```
+
+The file has to be PCM16, mono, 8 kHz. The daemon opens a talk session on the
+same TCP port used for video, sends the audio in 40 ms frames and closes.
+
 ## Checking cloud access
 
 ```

@@ -96,6 +96,19 @@ puerta ni pide video: solo el handshake.
 Ojo: el timbre solo responde si el daemon corre en la misma red que el. Desde
 otra red el escaneo no encuentra nada, y eso no es un fallo del daemon.
 
+## Hablar al visitante (solo LAN)
+
+El timbre tiene altavoz, pero solo en su red local: el tunel del cloud lleva
+video y el audio del timbre, nunca audio hacia el.
+
+```sh
+ffmpeg -i mensaje.wav -ar 8000 -ac 1 -f wav -c:a pcm_s16le /tmp/mensaje8k.wav
+WIBOX_LAN_ADDR=192.168.1.60:34567 ./wibox-daemon -talk /tmp/mensaje8k.wav
+```
+
+El fichero tiene que ser PCM16, mono, 8 kHz. El daemon abre una sesion de talk
+en el mismo puerto TCP del video, manda el audio en tramas de 40 ms y cierra.
+
 ## Comprobar el acceso al cloud
 
 ```

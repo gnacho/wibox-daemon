@@ -327,6 +327,7 @@ func main() {
 	ust := flag.Bool("ust", false, "recorre la cadena remota hasta los candidatos de p2pconnect y sale")
 	remote := flag.Bool("remote", false, "abre la puerta por la cadena remota propia, sin movil ni SDK")
 	configPath := flag.String("config", "", "fichero KEY=VALOR con la configuracion (para lanzarlo desde go2rtc u otro padre)")
+	talkPath := flag.String("talk", "", "manda un WAV PCM16 mono 8 kHz al altavoz del timbre por LAN (necesita WIBOX_LAN_ADDR)")
 	decodePath := flag.String("decode", "", "analiza un volcado hecho con WIBOX_RAW_DUMP usando la clave del token")
 	flag.Parse()
 
@@ -404,6 +405,25 @@ func main() {
 		}
 		if err := probeRemote(cfg, d.auth.session); err != nil {
 			log.Fatalf("ust: %v", err)
+		}
+		return
+	}
+
+	if *talkPath != "" {
+		if cfg.deviceID == "" {
+			log.Fatal("falta WIBOX_DEVICE_ID")
+		}
+		if err := d.login(); err != nil {
+			log.Fatalf("login: %v", err)
+		}
+		tok, err := d.auth.DeviceToken(cfg.deviceID)
+		if err != nil {
+			log.Fatalf("token: %v", err)
+		}
+		// El altavoz vive en la sesion de LAN: la contrasena es la del QUII
+		// local, no el dynamic password del cloud.
+		if err := runTalk(cfg, []byte(tok.DataEncodeKey), encodeDevicePassword(tok.AuthCode), *talkPath); err != nil {
+			log.Fatalf("talk: %v", err)
 		}
 		return
 	}
