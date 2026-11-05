@@ -52,3 +52,21 @@ func TestVideoLoopStopsBeforeTheFirstAttempt(t *testing.T) {
 		t.Fatal("no deberia pedir credenciales con la senal ya cerrada")
 	}
 }
+
+func TestNextVideoDelayDoublesUpToTheCeiling(t *testing.T) {
+	delay := videoRetryDelay
+	var got []time.Duration
+	for i := 0; i < 5; i++ {
+		delay = nextVideoDelay(delay, videoRetryMax)
+		got = append(got, delay)
+	}
+	want := []time.Duration{10 * time.Second, 20 * time.Second, 40 * time.Second, 60 * time.Second, 60 * time.Second}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("paso %d: %v, se esperaba %v", i, got[i], want[i])
+		}
+	}
+	if nextVideoDelay(0, videoRetryMax) != videoRetryDelay {
+		t.Fatal("una espera de cero debe volver a la inicial")
+	}
+}
