@@ -310,6 +310,9 @@ Ver `deploy/wibox-daemon.service` (systemd) y `deploy/haos-wibox.yaml` (Home
 Assistant). El daemon no necesita root: escucha en un puerto alto y solo habla
 hacia fuera.
 
+Las comprobaciones de salud, el procedimiento de publicacion y los limites
+conocidos estan en [docs/operations.md](docs/operations.md).
+
 ## Protocolo
 
 El protocolo completo esta en [`docs/protocol.md`](docs/protocol.md). Resumen de

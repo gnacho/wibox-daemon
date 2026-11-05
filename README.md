@@ -312,6 +312,9 @@ See `deploy/wibox-daemon.service` (systemd) and `deploy/haos-wibox.yaml` (Home
 Assistant). The daemon does not need root: it listens on a high port and only
 talks outwards.
 
+Health checks, the shipping procedure and the known limits live in
+[docs/operations.md](docs/operations.md).
+
 ## Protocol
 
 The full wire protocol is in [`docs/protocol.md`](docs/protocol.md). Summary of
