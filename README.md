@@ -261,6 +261,20 @@ always-on, and expect the first image to be slow when nobody has rung.
 doorbell, check the cloud, open the door and read the errors. The real opening
 can only be tested on the same network as the doorbell.
 
+## Troubleshooting
+
+Everything the daemon knows is in `/status`. These are the usual readings:
+
+| What you see | What it means | What to do |
+|---|---|---|
+| `device_online: false` | The cloud has not seen the doorbell since `devices_checked`. It runs on batteries. | Wait for movement at the portal, or open with `?wait=0` and handle the immediate 503. |
+| `cloud_ok: false` with `cloud_error` | Login to the manufacturer cloud failed. | Check `WIBOX_ACCOUNT`/`WIBOX_PASSWORD` and that the gateway answers. |
+| `video_pending` growing, `video_keyframes: 0` | Media is arriving, the picture is waiting for a keyframe. The stream is alive. | Nothing to fix: the doorbell decides when to send an IDR. |
+| `video_session: true`, counters at zero | A player is connected but the bell has not sent anything yet. | Keep watching; it will fill up when the bell wakes. |
+| `last_open.rc: 0` | The door opened. | Nothing. |
+| `last_open.rc: -10029` | The opening PIN was rejected. | Fix `WIBOX_UNLOCK_PASSWORD`. |
+| `last_open.rc: -1` with a p2pconnect timeout | The bell went back to sleep before the tunnel was ready. | Try again in a waking window. |
+
 ## Deployment
 
 See `deploy/wibox-daemon.service` (systemd) and `deploy/haos-wibox.yaml` (Home

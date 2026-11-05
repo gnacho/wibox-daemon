@@ -259,6 +259,20 @@ encendida, y la primera imagen tarda cuando nadie ha llamado.
 comprobar el cloud, abrir la puerta y leer los errores. La apertura real solo se
 puede probar en la misma red que el timbre.
 
+## Diagnostico
+
+Todo lo que sabe el daemon esta en `/status`. Estas son las lecturas habituales:
+
+| Lo que ves | Que significa | Que hacer |
+|---|---|---|
+| `device_online: false` | El cloud no ha visto el timbre desde `devices_checked`. Va a pilas. | Esperar a que alguien pase por el portal, o abrir con `?wait=0` y tratar el 503 inmediato. |
+| `cloud_ok: false` con `cloud_error` | Fallo el login contra el cloud del fabricante. | Revisar `WIBOX_ACCOUNT`/`WIBOX_PASSWORD` y que el gateway responda. |
+| `video_pending` subiendo y `video_keyframes: 0` | Llega media y falta el keyframe. El stream esta vivo. | Nada que arreglar: el timbre decide cuando manda un IDR. |
+| `video_session: true` con contadores a cero | Hay un reproductor conectado pero el timbre aun no manda nada. | Esperar, se llenara cuando despierte. |
+| `last_open.rc: 0` | La puerta se abrio. | Nada. |
+| `last_open.rc: -10029` | El PIN de apertura fue rechazado. | Corregir `WIBOX_UNLOCK_PASSWORD`. |
+| `last_open.rc: -1` con timeout de p2pconnect | El timbre volvio a dormirse antes de montar el tunel. | Reintentar en una ventana de despertar. |
+
 ## Despliegue
 
 Ver `deploy/wibox-daemon.service` (systemd) y `deploy/haos-wibox.yaml` (Home
