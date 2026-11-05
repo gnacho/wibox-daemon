@@ -327,16 +327,20 @@ func decodeQuiiPacket(key, data []byte) (*packet, int, error) {
 	total := 32 + size
 
 	if isMedia {
-		prefix := cmdSize
-		if prefix > len(body) {
-			prefix = len(body)
+		// El cuerpo va cifrado en bloques de 16 pero la cabecera anuncia el
+		// tamano sin relleno (180 en el timbre real), asi que se descifra el
+		// multiplo de 16 hacia abajo y los 4 bytes de cola se descartan. El
+		// resultado es un cpacket, que es lo que espera el demuxer.
+		aligned := size - size%16
+		if aligned == 0 {
+			return nil, 0, fmt.Errorf("cuerpo de media sin bloques: %d", size)
 		}
-		if prefix > 0 && prefix%16 == 0 {
-			if dec, derr := aesCBC(key, body[:prefix], false); derr == nil {
-				p.Command = dec[:min(rawSize, len(dec))]
-			}
+		dec, derr := aesCBC(key, body[:aligned], false)
+		if derr != nil {
+			return nil, 0, derr
 		}
-		p.Media = body[prefix:]
+		p.Media = dec
+		p.RawSize = size
 		return p, total, nil
 	}
 	// Un cuerpo cifrado siempre es multiplo de 16: si no lo es, la cabecera

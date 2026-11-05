@@ -62,7 +62,7 @@ Todo por variables de entorno (o un fichero `EnvironmentFile` de systemd):
 | `WIBOX_LAN_PORT` | Puerto que escanea `-discover` (por defecto `34567`) |
 | `WIBOX_API_TOKEN` | Token de la API HTTP. Vacio = sin autenticacion |
 | `WIBOX_API_PORT` | Puerto de la API (por defecto `8087`) |
-| `WIBOX_CHANNEL` / `WIBOX_STREAM` | Canal y stream de QUII (por defecto `1` y `1`) |
+| `WIBOX_CHANNEL` / `WIBOX_STREAM` | Canal y stream de QUII (por defecto `1` y `2`) |
 | `WIBOX_BASE_URL` | Cloud del fabricante |
 | `WIBOX_REMOTE` | `0` desactiva la via remota (por defecto activada) |
 | `WIBOX_REMOTE_ONLY` | `1` salta la via local aunque haya `WIBOX_LAN_ADDR` |

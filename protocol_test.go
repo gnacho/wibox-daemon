@@ -94,7 +94,7 @@ func TestEncodeDevicePasswordKeepsLongSecrets(t *testing.T) {
 	if encodeDevicePassword(long) != long {
 		t.Fatal("un secreto de 64 caracteres no se debe transformar")
 	}
-	short := encodeDevicePassword("0925")
+	short := encodeDevicePassword("1379")
 	if len(short) != 64 {
 		t.Fatalf("sha256 hex de 64 caracteres, obtuve %d", len(short))
 	}

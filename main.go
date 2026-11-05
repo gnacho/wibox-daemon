@@ -47,7 +47,7 @@ func env(key, def string) string {
 func loadConfig() config {
 	port, _ := strconv.Atoi(env("WIBOX_API_PORT", "8087"))
 	channel, _ := strconv.Atoi(env("WIBOX_CHANNEL", "1"))
-	stream, _ := strconv.Atoi(env("WIBOX_STREAM", "1"))
+	stream, _ := strconv.Atoi(env("WIBOX_STREAM", "2"))
 	lanPort, _ := strconv.Atoi(env("WIBOX_LAN_PORT", "34567"))
 	attempts, _ := strconv.Atoi(env("WIBOX_REMOTE_ATTEMPTS", "20"))
 	if attempts < 1 {
@@ -255,6 +255,7 @@ func main() {
 	ust := flag.Bool("ust", false, "recorre la cadena remota hasta los candidatos de p2pconnect y sale")
 	remote := flag.Bool("remote", false, "abre la puerta por la cadena remota propia, sin movil ni SDK")
 	configPath := flag.String("config", "", "fichero KEY=VALOR con la configuracion (para lanzarlo desde go2rtc u otro padre)")
+	decodePath := flag.String("decode", "", "analiza un volcado hecho con WIBOX_RAW_DUMP usando la clave del token")
 	flag.Parse()
 
 	// Se aplica antes de loadConfig: lo que no venga ya en el entorno se toma del
@@ -268,6 +269,26 @@ func main() {
 	cfg := loadConfig()
 	clientID = cfg.clientID
 	d := &daemon{cfg: cfg, auth: NewUserAuth(cfg.baseURL, cfg.clientID)}
+
+	if *decodePath != "" {
+		if cfg.deviceID == "" {
+			log.Fatal("decode: falta WIBOX_DEVICE_ID")
+		}
+		key, err := readKeyFromCheck(cfg, d)
+		if err != nil {
+			log.Fatalf("decode: %v", err)
+		}
+		limit := 6
+		if v := os.Getenv("WIBOX_DECODE_LIMIT"); v != "" {
+			if n, e := strconv.Atoi(v); e == nil {
+				limit = n
+			}
+		}
+		if err := decodeDump(*decodePath, key, limit); err != nil {
+			log.Fatalf("decode: %v", err)
+		}
+		return
+	}
 
 	if *video {
 		if cfg.deviceID == "" {
@@ -284,7 +305,7 @@ func main() {
 		if *videoAudio {
 			audioOut = os.Stderr
 		}
-		err = runVideo(cfg, d.auth.session, []byte(tok.DataEncodeKey), encodeDevicePassword(tok.AuthCode), os.Stdout, audioOut)
+		err = runVideo(cfg, d.auth.session, []byte(tok.DataEncodeKey), remotePlayPassword(tok), os.Stdout, audioOut)
 		if err != nil {
 			log.Fatalf("video: %v", err)
 		}
@@ -316,7 +337,7 @@ func main() {
 			log.Fatalf("token: %v", err)
 		}
 		key := []byte(tok.DataEncodeKey)
-		rc, err := remoteOpen(cfg, d.auth.session, key, encodeDevicePassword(tok.AuthCode))
+		rc, err := remoteOpen(cfg, d.auth.session, key, remotePlayPassword(tok))
 		if err != nil {
 			log.Fatalf("remote: rc=%d err=%v", rc, err)
 		}
@@ -353,8 +374,8 @@ func main() {
 			if err != nil {
 				log.Fatalf("token: %v", err)
 			}
-			fmt.Printf("token authCode=%d chars key=%d bytes expires=%s\n",
-				len(token.AuthCode), len(token.DataEncodeKey), token.Expired)
+			fmt.Printf("token authCode=%d chars key=%d bytes dynamic=%d chars expires=%s\n",
+				len(token.AuthCode), len(token.DataEncodeKey), len(token.DynamicPassword), token.Expired)
 		}
 		return
 	}
@@ -379,6 +400,16 @@ func main() {
 	if err := http.ListenAndServe(addr, d.routes()); err != nil {
 		log.Fatal(err)
 	}
+}
+
+// remotePlayPassword es la contrasena que va en el PLAY del camino remoto. La app
+// oficial manda el dynamic-password del token tal cual. El auth-code solo sirve de
+// respaldo cuando el token no lo trae.
+func remotePlayPassword(tok *DeviceToken) string {
+	if tok.DynamicPassword != "" {
+		return tok.DynamicPassword
+	}
+	return encodeDevicePassword(tok.AuthCode)
 }
 
 func maskToken(t string) string {

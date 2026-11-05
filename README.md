@@ -64,7 +64,7 @@ Everything through environment variables (or a systemd `EnvironmentFile`):
 | `WIBOX_LAN_PORT` | Port scanned by `-discover` (defaults to `34567`) |
 | `WIBOX_API_TOKEN` | HTTP API token. Empty = no authentication |
 | `WIBOX_API_PORT` | API port (defaults to `8087`) |
-| `WIBOX_CHANNEL` / `WIBOX_STREAM` | QUII channel and stream (defaults to `1` and `1`) |
+| `WIBOX_CHANNEL` / `WIBOX_STREAM` | QUII channel and stream (defaults to `1` and `2`) |
 | `WIBOX_BASE_URL` | Manufacturer cloud |
 | `WIBOX_REMOTE` | `0` disables the remote path (enabled by default) |
 | `WIBOX_REMOTE_ONLY` | `1` skips the local path even when `WIBOX_LAN_ADDR` is set |

@@ -32,6 +32,13 @@ const (
 	stage6RemoteBias uint32 = 0xFFFFFDFE // -0x202
 )
 
+// Limites del buffer de frames KCP sin enmarcar: por encima se resincroniza,
+// y si crece demasiado se descarta en vez de arrastrar basura para siempre.
+const (
+	kcpResyncLimit = 512 * 1024
+	kcpMaxBuffer   = 2 * 1024 * 1024
+)
+
 var playSyncStageStatuses = []uint32{0xFB540900, 0xFAD40900, 0xFE0D0900, 0xFC0C0900, 0xFB7F0900}
 
 // Payloads de las sondas de sincronizacion del play.
@@ -294,9 +301,12 @@ func (t *rbTunnel) emitQuii(payload []byte) {
 	}
 	buf := make([]byte, len(payload))
 	copy(buf, payload)
+	// NUNCA descartar en silencio: un paquete perdido deja un agujero en el
+	// flujo y el H264 deja de ser decodificable. Si el canal esta lleno se
+	// espera; el consumidor (el demuxer) va mucho mas rapido que la red.
 	select {
 	case t.quiiIncoming <- buf:
-	default:
+	case <-t.stop:
 	}
 }
 
@@ -320,6 +330,15 @@ func (t *rbTunnel) handleDataPayload(raw []byte) {
 		return
 	}
 	packetLocalID := readU32(raw, 0x0C)
+	// Hueco: se perdio un datagrama o llego desordenado. Antes se descartaba
+	// todo el resto del flujo para siempre y el video se quedaba congelado en
+	// los primeros frames. Se resincroniza y se sigue: el H264 tolera mejor un
+	// hueco que un flujo muerto.
+	if t.rxStreamKnown && t.rxStreamNextRemoteID != packetLocalID {
+		log.Printf("tunel: hueco en el flujo, esperado=%d llego=%d (resincronizo)", t.rxStreamNextRemoteID, packetLocalID)
+		t.rxKcpBuffer = nil
+		t.rxStreamKnown = false
+	}
 	if !t.rxStreamKnown || t.rxStreamNextRemoteID == packetLocalID {
 		t.rxStreamKnown = true
 		t.rxStreamNextRemoteID = packetLocalID + uint32(len(buffer))
@@ -344,10 +363,22 @@ func (t *rbTunnel) handleDataPayload(raw []byte) {
 			frames++
 		}
 		t.rxKcpBuffer = t.rxKcpBuffer[offset:]
-		// Un bloque que no trae frames KCP es payload directo de QUII.
-		if frames == 0 && offset == 0 && len(buffer) >= 4 && readU32(buffer, 0) != 0xFFFFFFFF {
-			t.emitQuii(buffer)
-			t.rxKcpBuffer = nil
+		// Nunca se emite el buffer crudo como si fuera un paquete QUII: esos
+		// bytes entran en el flujo del demuxer, lo desalinean y a partir de ahi
+		// se pierde casi toda la media (medido: 102 frames offline contra 5 en
+		// vivo por la misma sesion). Solo se emiten payloads de frames KCP.
+		//
+		// Si la cabeza del buffer no es un marco valido y ya se acumulo de mas,
+		// se avanza un byte para resincronizar en vez de arrastrarlo para
+		// siempre.
+		if frames == 0 {
+			if len(t.rxKcpBuffer) >= kcpResyncLimit {
+				t.rxKcpBuffer = t.rxKcpBuffer[1:]
+			}
+			if len(t.rxKcpBuffer) > kcpMaxBuffer {
+				log.Printf("tunel: %d bytes sin marco valido, se descartan", len(t.rxKcpBuffer))
+				t.rxKcpBuffer = nil
+			}
 		}
 	}
 	// ACK acumulativo, tambien para duplicados y desordenados.

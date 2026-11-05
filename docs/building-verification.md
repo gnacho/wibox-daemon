@@ -14,7 +14,7 @@ This document is the script to close that gap in a single visit.
   opens outbound connections.
 - The `wibox-daemon-linux-amd64` binary (or `-arm64` if the machine is ARM),
   from release v0.1.0 of the repository.
-- The credentials of the doorbell account and the opening PIN (0925).
+- The credentials of the doorbell account and the opening PIN (1379).
 - The phone with the app **fully closed**, not just in the background.
 
 ## Step 0: release the channel

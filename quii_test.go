@@ -130,14 +130,14 @@ func TestEncryptPacketMatchesReferenceLayout(t *testing.T) {
 // canal, marca de contrasena hasheada y el SHA-256 hexadecimal del pin desde el
 // byte 16.
 func TestUnlockBodyLayout(t *testing.T) {
-	body := unlockBody("0925", 1, 1)
+	body := unlockBody("1379", 1, 1)
 	if len(body) != 16+64 {
 		t.Fatalf("cuerpo de %d bytes, esperaba 80", len(body))
 	}
 	if body[0] != 1 || body[1] != 0 || body[2] != 1 || body[3] != 1 {
 		t.Fatalf("cabecera del cuerpo = % x", body[:4])
 	}
-	sum := sha256.Sum256([]byte("0925"))
+	sum := sha256.Sum256([]byte("1379"))
 	if got, want := string(body[16:]), hex.EncodeToString(sum[:]); got != want {
 		t.Fatalf("pin hasheado:\n got %s\nwant %s", got, want)
 	}

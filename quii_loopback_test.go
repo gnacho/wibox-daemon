@@ -116,7 +116,7 @@ func TestUnlockOverSocket(t *testing.T) {
 	}
 	defer client.Close()
 
-	rc, err := client.Unlock("0925", 1, 1)
+	rc, err := client.Unlock("1379", 1, 1)
 	if err != nil {
 		t.Fatalf("Unlock: %v", err)
 	}
@@ -135,7 +135,7 @@ func TestUnlockOverSocket(t *testing.T) {
 	if srv.gotB13 != 4 {
 		t.Fatalf("comando = %d, esperaba 4", srv.gotB13)
 	}
-	sum := sha256.Sum256([]byte("0925"))
+	sum := sha256.Sum256([]byte("1379"))
 	want := append([]byte{1, 0, 1, 1}, make([]byte, 12)...)
 	want = append(want, []byte(hex.EncodeToString(sum[:]))...)
 	if !bytes.Equal(srv.gotBody, want) {
