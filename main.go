@@ -569,6 +569,11 @@ func main() {
 		if secs, aerr := strconv.Atoi(os.Getenv("WIBOX_VIDEO_RETRY")); aerr == nil && secs > 0 {
 			videoRetryDelay = time.Duration(secs) * time.Second
 		}
+		// El techo del backoff tambien se ajusta: con el timbre durmiendo una
+		// tarde entera interesa espaciar los intentos sin tocar el codigo.
+		if secs, aerr := strconv.Atoi(os.Getenv("WIBOX_VIDEO_RETRY_MAX")); aerr == nil && secs > 0 {
+			videoRetryMax = time.Duration(secs) * time.Second
+		}
 		sigs := make(chan os.Signal, 1)
 		signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 		stop := make(chan struct{})

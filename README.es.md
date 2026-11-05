@@ -80,6 +80,7 @@ Todo por variables de entorno (o un fichero `EnvironmentFile` de systemd):
 | `WIBOX_VIDEO_LOCK` | Cerrojo que impide un segundo proceso de video sobre el timbre (por defecto `/tmp/wibox-video.lock`) |
 | `WIBOX_OPEN_COOLDOWN` | Segundos en los que se ignora otra apertura tras una correcta (por defecto `3`, `0` lo desactiva) |
 | `WIBOX_VIDEO_RETRY` | Espera base, en segundos, entre reconexiones de video antes de que el backoff doble (por defecto `5`) |
+| `WIBOX_VIDEO_RETRY_MAX` | Techo del backoff de reconexiones de video, en segundos (por defecto `60`) |
 | `WIBOX_DEBUG` | Cualquier valor activa trazas HTTP y MQTT |
 
 La configuracion tambien se puede pasar con `-config <fichero>`. Asi es como lo

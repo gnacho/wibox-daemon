@@ -1,5 +1,5 @@
 name: Wibox Doorbell
-version: "0.10.15"
+version: "0.10.16"
 slug: wibox
 description: Opens the Fermax Wi-Box doorbell through the vendor cloud
 url: https://github.com/gnacho/wibox-daemon
@@ -27,6 +27,7 @@ options:
   video_wait: 20
   open_cooldown: 3
   video_retry: 5
+  video_retry_max: 60
   cloud_check: 600
   video_max: 900
   play_resends: 3
@@ -42,6 +43,7 @@ schema:
   video_wait: int(1,600)
   open_cooldown: int(0,60)
   video_retry: int(1,300)
+  video_retry_max: int(5,3600)
   cloud_check: int(10,86400)
   video_max: int(0,86400)
   play_resends: int(0,50)
