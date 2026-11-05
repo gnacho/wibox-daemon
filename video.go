@@ -170,6 +170,11 @@ func runVideo(cfg config, session string, key []byte, password string, out io.Wr
 		}
 	}
 
+	// Si la API acaba de abrir, el timbre todavia tiene esa sesion y no deja
+	// montar otra: esperar aqui es mas barato que gastar el presupuesto remoto
+	// en p2pconnect que no van a terminar.
+	awaitOpenSettle(lockPath, cfg.openSettle)
+
 	s, err := establishRemote(cfg, session)
 	if err != nil {
 		return err

@@ -61,6 +61,9 @@ type config struct {
 	// openCooldown evita que una doble pulsacion mande dos ordenes al rele.
 	// 0 lo desactiva.
 	openCooldown time.Duration
+	// openSettle es lo que espera el proceso de video tras una apertura, porque
+	// el timbre sigue con esa sesion QUII y no le deja montar el tunel.
+	openSettle time.Duration
 	// cloudCheck es cada cuanto se comprueba el login y la lista contra el
 	// cloud para publicarlo en /status. 0 lo desactiva.
 	cloudCheck time.Duration
@@ -94,6 +97,11 @@ func loadConfig() config {
 	poll, _ := strconv.Atoi(env("WIBOX_AWAKE_POLL", "3"))
 	cloudEvery, _ := strconv.Atoi(env("WIBOX_CLOUD_CHECK", "600"))
 	cooldown, _ := strconv.Atoi(env("WIBOX_OPEN_COOLDOWN", "3"))
+	settleSecs, _ := strconv.Atoi(env("WIBOX_OPEN_SETTLE", "75"))
+	if settleSecs < 0 {
+		settleSecs = 0
+	}
+	settle := time.Duration(settleSecs) * time.Second
 	if poll < 1 {
 		poll = 3
 	}
@@ -119,6 +127,7 @@ func loadConfig() config {
 		haToken:        env("WIBOX_HA_TOKEN", ""),
 		haStream:       env("WIBOX_HA_STREAM", ""),
 		openCooldown:   time.Duration(cooldown) * time.Second,
+		openSettle:     settle,
 		videoLock:      env("WIBOX_VIDEO_LOCK", ""),
 		remoteBudget:   time.Duration(budget) * time.Second,
 		controlSock:    env("WIBOX_CONTROL_SOCK", ""),
@@ -168,6 +177,13 @@ func (d *daemon) recordOpen(deviceID, via string, rc int, err error) {
 		rec.Error = err.Error()
 	}
 	d.lastOpen = rec
+	lock := d.cfg.videoLock
+	if lock == "" {
+		lock = defaultVideoLock
+	}
+	if err := markOpen(lock, rec.At); err != nil {
+		log.Printf("open: no se pudo dejar la marca para el video: %v", err)
+	}
 }
 
 func (d *daemon) recordCloud(ok bool, err error) {
