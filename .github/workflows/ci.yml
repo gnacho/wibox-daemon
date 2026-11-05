@@ -15,11 +15,11 @@ jobs:
           go-version: '1.26'
           cache: true
       - name: gofmt
-        run: test -z "$(gofmt -l .)"
+        run: make fmt
       - name: vet
-        run: go vet ./...
+        run: make vet
       - name: tests with the race detector
-        run: go test -race -count=1 ./...
+        run: make race
       - name: coverage
         run: go test -count=1 -coverprofile=cover.out ./... && go tool cover -func=cover.out | tail -1
       - name: coverage floor
