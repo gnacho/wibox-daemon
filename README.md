@@ -134,8 +134,13 @@ compiled for, which is the fastest way to know what a deployment is running.
 GET  /health                      no token
 GET  /devices                     Authorization: Bearer <token>
 GET  /open?device=<udid>          Authorization: Bearer <token>
+GET  /open?device=<udid>&wait=0   Authorization: Bearer <token>
 GET  /status                      Authorization: Bearer <token>
 ```
+
+Add `wait=0` to `/open` and the call returns at once with a 503 when the last
+cloud check saw the doorbell asleep, instead of waiting up to four minutes for
+it to wake. Useful for automations that cannot block.
 
 `/status` reports the version, uptime, whether a video session is alive and the
 last opening attempt (route, code, error, time). It also carries

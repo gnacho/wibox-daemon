@@ -422,3 +422,45 @@ func TestStatusReportsDeviceOffline(t *testing.T) {
 		t.Fatal("el timbre venia offline en la ultima lista")
 	}
 }
+
+func TestOpenWaitZeroFailsFastWhenTheBellSleeps(t *testing.T) {
+	d := newTestDaemon(func(string) (int, string, error) {
+		t.Fatal("no deberia intentar abrir con el timbre dormido")
+		return 0, "", nil
+	})
+	d.recordDevices([]deviceInfo{{ID: "dev-por-defecto", Online: false}})
+
+	req := httptest.NewRequest("GET", "/open?wait=0", nil)
+	req.Header.Set("Authorization", "Bearer secreto")
+	rec := httptest.NewRecorder()
+	d.routes().ServeHTTP(rec, req)
+
+	if rec.Code != 503 {
+		t.Fatalf("codigo=%d, se esperaba 503", rec.Code)
+	}
+	var body map[string]any
+	if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
+		t.Fatalf("json: %v", err)
+	}
+	if body["ok"] != false {
+		t.Fatalf("ok=%v", body["ok"])
+	}
+}
+
+func TestOpenWaitZeroTriesWhenTheBellIsAwake(t *testing.T) {
+	calls := 0
+	d := newTestDaemon(func(string) (int, string, error) {
+		calls++
+		return 0, "", nil
+	})
+	d.recordDevices([]deviceInfo{{ID: "dev-por-defecto", Online: true}})
+
+	req := httptest.NewRequest("GET", "/open?wait=0", nil)
+	req.Header.Set("Authorization", "Bearer secreto")
+	rec := httptest.NewRecorder()
+	d.routes().ServeHTTP(rec, req)
+
+	if rec.Code != 200 || calls != 1 {
+		t.Fatalf("codigo=%d calls=%d", rec.Code, calls)
+	}
+}

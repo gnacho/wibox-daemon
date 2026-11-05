@@ -434,6 +434,18 @@ func (d *daemon) routes() http.Handler {
 			d.writeJSON(w, 400, map[string]any{"error": "falta device"})
 			return
 		}
+		// Con wait=0 la llamada no espera a que el timbre despierte: si el
+		// ultimo chequeo del cloud lo vio dormido, se responde ya. Sirve para
+		// automatizaciones que no pueden quedarse cuatro minutos colgadas.
+		if r.URL.Query().Get("wait") == "0" {
+			if online, at := d.deviceOnlineState(device); !at.IsZero() && !online {
+				d.writeJSON(w, 503, map[string]any{
+					"ok":    false,
+					"error": "el timbre esta dormido segun el ultimo chequeo del cloud",
+				})
+				return
+			}
+		}
 		rc, expired, err := d.open(device)
 		if err != nil {
 			log.Printf("open %s rc=%d err=%v", device, rc, err)

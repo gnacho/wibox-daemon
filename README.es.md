@@ -132,8 +132,13 @@ Dentro del add-on esta misma comprobacion se puede programar con la opcion
 GET  /health                      sin token
 GET  /devices                     Authorization: Bearer <token>
 GET  /open?device=<udid>          Authorization: Bearer <token>
+GET  /open?device=<udid>&wait=0   Authorization: Bearer <token>
 GET  /status                      Authorization: Bearer <token>
 ```
+
+Con `wait=0` en `/open` la llamada responde al momento con un 503 si el ultimo
+chequeo del cloud vio el timbre dormido, en vez de esperar hasta cuatro minutos
+a que despierte. Util para automatizaciones que no pueden quedarse colgadas.
 
 `/status` informa de la version, el tiempo encendido, si hay una sesion de
 video viva y el ultimo intento de apertura (via, codigo, error y hora).
