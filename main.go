@@ -340,9 +340,9 @@ func (d *daemon) routes() http.Handler {
 		out["video_keyframes"] = keys
 		ok, cerr, at := d.cloudState()
 		out["cloud_ok"] = ok
-		if cerr != "" {
-			out["cloud_error"] = cerr
-		}
+		// Vacio cuando no hay error, para que el atributo exista siempre y
+		// una automatizacion no dependa de que el sensor cambie de forma.
+		out["cloud_error"] = cerr
 		if !at.IsZero() {
 			out["cloud_checked"] = at
 		}

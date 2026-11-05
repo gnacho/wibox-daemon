@@ -331,8 +331,8 @@ func TestStatusReportsCloudState(t *testing.T) {
 	if _, existe := got["cloud_checked"]; !existe {
 		t.Fatal("falta cloud_checked tras una comprobacion")
 	}
-	if _, existe := got["cloud_error"]; existe {
-		t.Fatalf("cloud_error no deberia ir cuando no hay error: %v", got["cloud_error"])
+	if msg, _ := got["cloud_error"].(string); msg != "" {
+		t.Fatalf("cloud_error=%q, se esperaba vacio", msg)
 	}
 }
 
