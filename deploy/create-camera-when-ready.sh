@@ -74,8 +74,10 @@ puller=
 if [ "$PULL" != 0 ] && command -v ffmpeg >/dev/null 2>&1; then
   (
     while :; do
-      ffmpeg -v error -rtsp_transport tcp -i "$STREAM" -t 120 -f null - >/dev/null 2>&1
-      sleep 5
+      # Tiradas cortas: mientras hay consumidor el productor ocupa la unica
+      # sesion QUII del timbre, y abrir la puerta importa mas que el video.
+      ffmpeg -v error -rtsp_transport tcp -i "$STREAM" -t 30 -f null - >/dev/null 2>&1
+      sleep 30
     done
   ) &
   puller=$!
