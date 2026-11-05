@@ -1,114 +1,99 @@
-# Verifying the door opening on the building network
+# Checking everything on the building network
 
-The daemon already works on x86 against the manufacturer cloud (login, device
-list and token, verified on 4-Nov-2026). The only thing that has not been tested
-is the real opening against the doorbell, because the doorbell is not on the home
-network and the remote path depends on the proprietary SDK for arm64.
+The daemon works from anywhere through the vendor cloud: login, device list,
+token, remote door opening and the video/audio stream are verified on x86
+without the phone and without the manufacturer SDK. What still needs the
+building network is the **local** path: the doorbell answers QUII on its own
+network, and the talk channel only exists there.
 
-This document is the script to close that gap in a single visit.
+Use this runbook when you are in the building, or when the daemon runs on a
+machine inside it.
 
 ## What you need
 
-- A Linux machine on the same network as the doorbell (laptop, mini PC,
-  container). The daemon does not need root, it listens on a high port and only
-  opens outbound connections.
-- The `wibox-daemon-linux-amd64` binary (or `-arm64` if the machine is ARM),
-  from release v0.1.0 of the repository.
-- The credentials of the doorbell account and the opening PIN (1379).
-- The phone with the app **fully closed**, not just in the background.
+- A `wibox-daemon-linux-amd64` (or `arm64`) binary, or a container image,
+  from the current release. Check `./wibox-daemon -version`.
+- The account, password, device id and opening PIN in the config file
+  (`deploy/wibox-daemon.conf.example` shows the variables).
+- The phone app closed. The doorbell accepts a single QUII session, so an open
+  stream from the app makes everything else answer BUSY.
 
 ## Step 0: release the channel
 
-The doorbell accepts only one video session at a time. In the Android app tests
-the Opo left the channel held and the doorbell answered BUSY to any later
-attempt. Before testing the daemon, close the app on the phone and check that no
-session is left open.
+Close the live view in the phone app and wait a few seconds. If something is
+still holding the session, the bell answers `setup status=3` or a plain BUSY.
 
-## Step 1: discover the doorbell
+## Step 1: find the doorbell
 
 ```
-chmod +x wibox-daemon-linux-amd64
-./wibox-daemon-linux-amd64 -discover
+./wibox-daemon -discover
 ```
 
 Expected output:
 
 ```
-escaneando el puerto 34567 en las redes locales...
 timbre encontrado en 192.168.1.60:34567
 WIBOX_LAN_ADDR=192.168.1.60:34567
 ```
 
-The scan walks the /24 of every network interface, so it covers the building
-network if it is a normal /24. If it returns
-`no se encontro ningun timbre QUII en la red local`, there are two possible
-causes: the network is larger than a /24, or the doorbell is on another subnet.
-In that case take the IP from the official app or from the router ARP table and
-pass it by hand in step 3.
+The scan covers one /24 per local interface, so a bigger subnet needs the
+address typed by hand (`WIBOX_LAN_ADDR`, `WIBOX_LAN_PORT`).
 
-Discovery only does the 32-byte QUII handshake. It does not open the door or
-request video.
-
-## Step 2: check cloud access
+## Step 2: check the cloud
 
 ```
-WIBOX_ACCOUNT='...' WIBOX_PASSWORD='...' ./wibox-daemon-linux-amd64 -check
+./wibox-daemon -check
 ```
 
-Expected output:
+This logs in, lists the devices and asks for a token. If it fails, nothing
+else will work: the token is what feeds the QUII password.
+
+## Step 3: open the door on the LAN
 
 ```
-login ok account=...
-device id=23123csfewyk name=ProbeOPO model=IDS7938
-token authCode=64 chars key=32 bytes expires=...
+WIBOX_LAN_ADDR=192.168.1.60:34567 ./wibox-daemon -remote
 ```
 
-The daemon requests a new token on every opening, so an expired token is not a
-problem. What it does need is internet access: without cloud there is no token
-and without token there is no QUII.
+With `WIBOX_LAN_ADDR` set and `WIBOX_REMOTE_ONLY=0`, the daemon tries the LAN
+first and only falls back to the cloud tunnel. A successful opening prints
+`rc=0`; the HTTP API answers `{"ok":true,"rc":0}` on `/open`.
 
-## Step 3: open the door
-
-First terminal:
+## Step 4: the stream
 
 ```
-WIBOX_ACCOUNT='...' WIBOX_PASSWORD='...' \
-WIBOX_LAN_ADDR=192.168.1.60:34567 \
-WIBOX_API_TOKEN=test \
-./wibox-daemon-linux-amd64
+./wibox-daemon -video -video-audio > stream.ts
+ffprobe stream.ts
 ```
 
-Second terminal:
+With `WIBOX_MPEGTS=1` (the add-on sets it) the output is MPEG-TS with an H.264
+track and a G.711A track. Audio starts as soon as the bell sends it; the
+picture waits for a keyframe, which the bell schedules on its own (roughly
+every 90 s of stream, and not in every session). `ffprobe` reports the audio
+track as `unknown`: it does not recognise A-law inside MPEG-TS.
+
+## Step 5: talk to the visitor
 
 ```
-curl -H 'Authorization: Bearer test' \
-  'http://127.0.0.1:8087/open?device=23123csfewyk'
+ffmpeg -i mensaje.wav -ar 8000 -ac 1 -f wav -c:a pcm_s16le /tmp/mensaje8k.wav
+WIBOX_LAN_ADDR=192.168.1.60:34567 ./wibox-daemon -talk /tmp/mensaje8k.wav
 ```
 
-Expected response, and the door must open:
+Only over the LAN: the cloud tunnel has no speaker channel.
 
-```json
-{"ok":true,"rc":0,"token_expires":"..."}
-```
+## Error table
 
-## How to read the errors
-
-| Response or log | What it means |
+| Symptom | Cause |
 |---|---|
-| `rc: -10029` and `contrasena de apertura rechazada` | The PIN is wrong. Check `WIBOX_UNLOCK_PASSWORD`. |
-| `setup sin respuesta` or `setup status=3` | The port is not the QUII one, or the doorbell is busy with another session. Go back to step 0. |
-| `sin WIBOX_LAN_ADDR no hay via local` | The variable with the doorbell IP is missing. |
-| `timeout esperando "login"` | The cloud does not answer. Check the machine internet access. |
-| `data-encode-key de N bytes, se esperaban 32` | The cloud returned a strange token. Retry, and if it persists, write it down. |
+| `rc=-10029` | Opening PIN rejected |
+| `setup status=3` | Bell busy, another session open |
+| `talk: setup rechazado` | Another talk or live session running |
+| `data-encode-key de N bytes` | The token is not the one expected, check `-check` |
+| `timeout esperando p2pconnect` | Bell asleep (it runs on batteries) or offline |
+| No frames after the play | The bell did not send a keyframe yet |
 
 ## What to bring back
 
-1. The literal output of `-discover`, with the real doorbell IP and port.
-2. The literal response of `/open`.
-3. The daemon log lines.
-4. Whether it opened on the first try or a retry was needed.
-5. Whether the doorbell was busy with the phone at that moment.
-
-With that the verification is closed and what remains is to set `WIBOX_LAN_ADDR`,
-install the systemd unit and point the Home Assistant `rest_command` at the
-daemon.
+- The output of `-discover`, with the address it found.
+- The `rc` of the opening and the log lines around it.
+- Whether the stream carried audio, video, both or nothing.
+- Whether `-talk` returned without error.
