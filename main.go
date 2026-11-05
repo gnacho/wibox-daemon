@@ -190,16 +190,26 @@ func (d *daemon) deviceOnlineState(deviceID string) (bool, time.Time) {
 	return false, d.devicesAt
 }
 
+// checkCloud hace una vuelta completa: login, lista de dispositivos y
+// publicacion del resultado. Se separo del bucle para poder probarlo sin
+// esperar.
+func (d *daemon) checkCloud() {
+	if err := d.login(); err != nil {
+		d.recordCloud(false, err)
+		return
+	}
+	resp, err := d.auth.DeviceList()
+	if err != nil {
+		d.recordCloud(false, err)
+		return
+	}
+	d.recordDevices(deviceInfosFrom(resp))
+	d.recordCloud(true, nil)
+}
+
 func (d *daemon) watchCloud(interval time.Duration) {
 	for {
-		if err := d.login(); err != nil {
-			d.recordCloud(false, err)
-		} else if resp, err := d.auth.DeviceList(); err != nil {
-			d.recordCloud(false, err)
-		} else {
-			d.recordDevices(deviceInfosFrom(resp))
-			d.recordCloud(true, nil)
-		}
+		d.checkCloud()
 		time.Sleep(interval)
 	}
 }
