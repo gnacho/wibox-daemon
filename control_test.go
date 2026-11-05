@@ -158,18 +158,18 @@ func TestControlStatsDoesNotUnlock(t *testing.T) {
 	srv, err := newControlServer(sock, func() (int, error) {
 		calls++
 		return 0, nil
-	}, func() (int, int) { return 42, 3 })
+	}, func() (int, int, int) { return 42, 3, 7 })
 	if err != nil {
 		t.Fatalf("servidor: %v", err)
 	}
 	defer srv.close()
 
-	frames, keys, ok := controlStats(sock)
+	frames, keys, pending, ok := controlStats(sock)
 	if !ok {
 		t.Fatal("stats no encontro el servidor")
 	}
-	if frames != 42 || keys != 3 {
-		t.Fatalf("stats frames=%d keys=%d", frames, keys)
+	if frames != 42 || keys != 3 || pending != 7 {
+		t.Fatalf("stats frames=%d keys=%d pending=%d", frames, keys, pending)
 	}
 	if calls != 0 {
 		t.Fatalf("stats abrio la puerta %d veces", calls)
@@ -177,7 +177,7 @@ func TestControlStatsDoesNotUnlock(t *testing.T) {
 }
 
 func TestControlStatsWithoutServer(t *testing.T) {
-	if _, _, ok := controlStats(testSockPath(t)); ok {
+	if _, _, _, ok := controlStats(testSockPath(t)); ok {
 		t.Fatal("sin servidor no deberia haber stats")
 	}
 }

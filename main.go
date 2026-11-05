@@ -326,7 +326,7 @@ func (d *daemon) routes() http.Handler {
 		// Una sola consulta al canal de control: dice si hay sesion viva y
 		// cuanto video lleva, para que Home Assistant sepa si ya puede
 		// decodificar algo.
-		frames, keys, session := controlStats(d.cfg.controlSock)
+		frames, keys, pending, session := controlStats(d.cfg.controlSock)
 		out := map[string]any{
 			"service":       "wibox-daemon",
 			"version":       version,
@@ -339,6 +339,9 @@ func (d *daemon) routes() http.Handler {
 		// dependa de que el sensor cambie de forma.
 		out["video_frames"] = frames
 		out["video_keyframes"] = keys
+		// Frames ya recibidos que se descartan porque aun no llego el keyframe:
+		// asi se distingue "hay media pero falta IDR" de "no llega nada".
+		out["video_pending"] = pending
 		ok, cerr, at := d.cloudState()
 		out["cloud_ok"] = ok
 		// Vacio cuando no hay error, para que el atributo exista siempre y

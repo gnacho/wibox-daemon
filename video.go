@@ -105,7 +105,7 @@ func runVideo(cfg config, session string, key []byte, password string, out io.Wr
 	var ctl *controlServer
 	// Contadores publicados por el canal de control (otra gorutina): van en
 	// atomicos para no tener carreras con el bucle de frames.
-	var vfCount, kfCount atomic.Int64
+	var vfCount, kfCount, pendingCount atomic.Int64
 	if cfg.pin != "" {
 		unlock := func() (int, error) {
 			unlockMu.Lock()
@@ -136,8 +136,8 @@ func runVideo(cfg config, session string, key []byte, password string, out io.Wr
 				return -1, fmt.Errorf("timeout esperando la respuesta de apertura")
 			}
 		}
-		stats := func() (int, int) {
-			return int(vfCount.Load()), int(kfCount.Load())
+		stats := func() (int, int, int) {
+			return int(vfCount.Load()), int(kfCount.Load()), int(pendingCount.Load())
 		}
 		if srv, serr := newControlServer(controlSockPath(""), unlock, stats); serr != nil {
 			log.Printf("video: sin canal de apertura: %v", serr)
@@ -356,6 +356,7 @@ func runVideo(cfg config, session string, key []byte, password string, out io.Wr
 					countNALTypes(f.Bitstream, nalCensus)
 					if waitingIDR && !f.KeyFrame {
 						skipped++
+						pendingCount.Store(int64(skipped))
 						if skipped <= 5 || skipped%100 == 0 {
 							log.Printf("video: esperando keyframe, %d frames saltados, censo NAL %v", skipped, nalCensus)
 						}

@@ -240,7 +240,7 @@ func TestStatusReportsZeroCountersWithoutSession(t *testing.T) {
 
 func TestStatusReportsVideoFrames(t *testing.T) {
 	sock := t.TempDir() + "/video.sock"
-	srv, err := newControlServer(sock, func() (int, error) { return 0, nil }, func() (int, int) { return 120, 4 })
+	srv, err := newControlServer(sock, func() (int, error) { return 0, nil }, func() (int, int, int) { return 120, 4, 900 })
 	if err != nil {
 		t.Fatalf("servidor: %v", err)
 	}
@@ -262,12 +262,16 @@ func TestStatusReportsVideoFrames(t *testing.T) {
 		VideoSession bool `json:"video_session"`
 		VideoFrames  int  `json:"video_frames"`
 		VideoKeys    int  `json:"video_keyframes"`
+		VideoPending int  `json:"video_pending"`
 	}
 	if derr := json.NewDecoder(resp.Body).Decode(&got); derr != nil {
 		t.Fatalf("json: %v", derr)
 	}
 	if !got.VideoSession {
 		t.Fatal("se esperaba sesion de video")
+	}
+	if got.VideoPending != 900 {
+		t.Fatalf("pending=%d, se esperaban 900", got.VideoPending)
 	}
 	if got.VideoFrames != 120 || got.VideoKeys != 4 {
 		t.Fatalf("frames=%d keys=%d", got.VideoFrames, got.VideoKeys)

@@ -23,11 +23,12 @@ type controlRequest struct {
 }
 
 type controlResponse struct {
-	OK     bool   `json:"ok"`
-	RC     int    `json:"rc"`
-	Error  string `json:"error,omitempty"`
-	Frames int    `json:"frames,omitempty"`
-	Keys   int    `json:"keys,omitempty"`
+	OK      bool   `json:"ok"`
+	RC      int    `json:"rc"`
+	Error   string `json:"error,omitempty"`
+	Frames  int    `json:"frames,omitempty"`
+	Keys    int    `json:"keys,omitempty"`
+	Pending int    `json:"pending,omitempty"`
 }
 
 // controlServer atiende peticiones de apertura sobre un socket unix. El pin no
@@ -47,7 +48,7 @@ func controlSockPath(explicit string) string {
 	return defaultControlSock
 }
 
-func newControlServer(path string, unlock func() (int, error), stats func() (int, int)) (*controlServer, error) {
+func newControlServer(path string, unlock func() (int, error), stats func() (int, int, int)) (*controlServer, error) {
 	// Un fichero de socket viejo impide escuchar. Solo se borra si no hay
 	// nadie detras: si otro proceso atiende, se devuelve error para no
 	// robarle el canal.
@@ -73,7 +74,7 @@ func newControlServer(path string, unlock func() (int, error), stats func() (int
 	return s, nil
 }
 
-func (s *controlServer) serve(unlock func() (int, error), stats func() (int, int)) {
+func (s *controlServer) serve(unlock func() (int, error), stats func() (int, int, int)) {
 	for {
 		conn, err := s.ln.Accept()
 		if err != nil {
@@ -83,7 +84,7 @@ func (s *controlServer) serve(unlock func() (int, error), stats func() (int, int
 	}
 }
 
-func (s *controlServer) handle(conn net.Conn, unlock func() (int, error), stats func() (int, int)) {
+func (s *controlServer) handle(conn net.Conn, unlock func() (int, error), stats func() (int, int, int)) {
 	defer conn.Close()
 	conn.SetDeadline(time.Now().Add(30 * time.Second))
 
@@ -102,7 +103,7 @@ func (s *controlServer) handle(conn net.Conn, unlock func() (int, error), stats 
 	if req.Command == "stats" {
 		resp := controlResponse{OK: true}
 		if stats != nil {
-			resp.Frames, resp.Keys = stats()
+			resp.Frames, resp.Keys, resp.Pending = stats()
 		}
 		json.NewEncoder(conn).Encode(resp)
 		return
@@ -151,21 +152,21 @@ func controlPing(path string) bool {
 
 // controlStats pregunta a la sesion de video cuantos frames lleva. El tercer
 // valor dice si habia alguien escuchando.
-func controlStats(path string) (int, int, bool) {
+func controlStats(path string) (int, int, int, bool) {
 	conn, err := net.DialTimeout("unix", controlSockPath(path), 300*time.Millisecond)
 	if err != nil {
-		return 0, 0, false
+		return 0, 0, 0, false
 	}
 	defer conn.Close()
 	conn.SetDeadline(time.Now().Add(2 * time.Second))
 	if err := json.NewEncoder(conn).Encode(controlRequest{Command: "stats"}); err != nil {
-		return 0, 0, false
+		return 0, 0, 0, false
 	}
 	var resp controlResponse
 	if err := json.NewDecoder(conn).Decode(&resp); err != nil {
-		return 0, 0, false
+		return 0, 0, 0, false
 	}
-	return resp.Frames, resp.Keys, resp.OK
+	return resp.Frames, resp.Keys, resp.Pending, resp.OK
 }
 
 // controlUnlock intenta abrir la puerta por la sesion de video en curso. El
