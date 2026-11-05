@@ -26,6 +26,10 @@ func newTestTunnel(t *testing.T) (*rbTunnel, *net.UDPConn) {
 		key[i] = byte(i)
 	}
 	tr := newRbTunnel(conn, bell.LocalAddr().(*net.UDPAddr), "sesion", key, "clave", 1, 2)
+	// Sin cerrar el tunel, las gorutinas que arrancan algunos tests (el play
+	// sync) siguen escribiendo campos mientras corre el resto de la suite, y
+	// el detector de carreras lo canta.
+	t.Cleanup(func() { tr.close() })
 	return tr, bell
 }
 
