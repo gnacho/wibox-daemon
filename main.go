@@ -177,6 +177,11 @@ func (d *daemon) recordOpen(deviceID, via string, rc int, err error) {
 		rec.Error = err.Error()
 	}
 	d.lastOpen = rec
+	// Solo una apertura buena deja la sesion del timbre ocupada. Marcando
+	// tambien los fallos, el video esperaria sin motivo.
+	if err != nil || rc != 0 {
+		return
+	}
 	lock := d.cfg.videoLock
 	if lock == "" {
 		lock = defaultVideoLock
