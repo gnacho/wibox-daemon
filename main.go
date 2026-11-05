@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -712,7 +713,21 @@ func main() {
 	addr := fmt.Sprintf("0.0.0.0:%d", cfg.apiPort)
 	log.Printf("wibox-daemon escuchando en %s (token %s)", addr, maskToken(cfg.apiToken))
 	log.Printf("via local: %s", orNone(cfg.lanAddr))
-	if err := http.ListenAndServe(addr, d.routes()); err != nil {
+
+	srv := newHTTPServer(addr, d.routes())
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		<-sigs
+		// Cierre ordenado: el supervisor manda SIGTERM al actualizar y no
+		// conviene cortar una apertura a medias.
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		if err := srv.Shutdown(ctx); err != nil {
+			log.Printf("cierre del API: %v", err)
+		}
+	}()
+	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatal(err)
 	}
 }
