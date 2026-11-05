@@ -112,3 +112,27 @@ There are two ways to create the entry, and the daemon tries both:
    still image. This is what works while the doorbell sends no keyframe.
 
 The `advanced` block is mandatory in both cases, even without a stream.
+
+## Live view takes a while to start
+
+Measured against the add-on with the doorbell asleep: `ffprobe` of
+`rtsp://<host>:8556/wibox` prints the tracks (`h264`, `pcm_alaw`) but only after
+**about 32 seconds**, and it returns nothing at all within 8 seconds.
+
+The daemon is not the cause. Run inside the container, the producer writes its
+first packet within two seconds even with no tunnel open:
+
+```
+timeout 8 /usr/bin/wibox-daemon -video -video-audio > /tmp/h.ts
+bytes a 2s: 564   # PAT, PMT and the SPS/PPS
+```
+
+What happens is that go2rtc does not publish the stream until its MPEG-TS
+demuxer has real media from the source, and the source only gets media once the
+tunnel with the doorbell is up (which needs a waking window). Until then
+`/api/streams` shows the producer running and no consumers, and the RTSP
+`DESCRIBE` waits.
+
+That is also why Home Assistant's camera flow used to time out: it validates by
+opening the stream and gives up in seconds. See "The camera entry creates
+itself" for how the entry is created anyway.
