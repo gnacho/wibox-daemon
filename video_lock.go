@@ -25,3 +25,17 @@ func acquireVideoLock(path string) (func(), error) {
 		f.Close()
 	}, nil
 }
+
+// videoLockFree dice si el cerrojo esta libre sin quedarselo: si otro proceso
+// de video lo tiene, /status puede explicar por que no hay sesion local.
+func videoLockFree(path string) bool {
+	if path == "" {
+		path = defaultVideoLock
+	}
+	release, err := acquireVideoLock(path)
+	if err != nil {
+		return false
+	}
+	release()
+	return true
+}

@@ -406,6 +406,9 @@ func (d *daemon) routes() http.Handler {
 		// Frames ya recibidos que se descartan porque aun no llego el keyframe:
 		// asi se distingue "hay media pero falta IDR" de "no llega nada".
 		out["video_pending"] = pending
+		// Si otro proceso de video tiene el cerrojo, la sesion local la lleva
+		// el y este proceso no puede abrir un tunel propio.
+		out["video_lock_free"] = videoLockFree(d.cfg.videoLock)
 		ok, cerr, at := d.cloudState()
 		out["cloud_ok"] = ok
 		// Vacio cuando no hay error, para que el atributo exista siempre y

@@ -286,6 +286,7 @@ Everything the daemon knows is in `/status`. These are the usual readings:
 | `device_online: false` | The cloud has not seen the doorbell since `devices_checked`. It runs on batteries. | Wait for movement at the portal, or open with `?wait=0` and handle the immediate 503. |
 | `cloud_ok: false` with `cloud_error` | Login to the manufacturer cloud failed. | Check `WIBOX_ACCOUNT`/`WIBOX_PASSWORD` and that the gateway answers. |
 | `video_pending` growing, `video_keyframes: 0` | Media is arriving, the picture is waiting for a keyframe. The stream is alive. | Nothing to fix: the doorbell decides when to send an IDR. |
+| `video_lock_free: false` | Another video process on this machine holds the lock (`/tmp/wibox-video.lock`), so the local session is its. | Nothing to fix: the lock is doing its job. |
 | `video_session: true`, counters at zero | A player is connected but the bell has not sent anything yet. | Keep watching; it will fill up when the bell wakes. |
 | `last_open.rc: 0` | The door opened. | Nothing. |
 | `last_open.rc: -10029` | The opening PIN was rejected. | Fix `WIBOX_UNLOCK_PASSWORD`. |

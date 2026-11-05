@@ -284,6 +284,7 @@ Todo lo que sabe el daemon esta en `/status`. Estas son las lecturas habituales:
 | `device_online: false` | El cloud no ha visto el timbre desde `devices_checked`. Va a pilas. | Esperar a que alguien pase por el portal, o abrir con `?wait=0` y tratar el 503 inmediato. |
 | `cloud_ok: false` con `cloud_error` | Fallo el login contra el cloud del fabricante. | Revisar `WIBOX_ACCOUNT`/`WIBOX_PASSWORD` y que el gateway responda. |
 | `video_pending` subiendo y `video_keyframes: 0` | Llega media y falta el keyframe. El stream esta vivo. | Nada que arreglar: el timbre decide cuando manda un IDR. |
+| `video_lock_free: false` | Otro proceso de video del mismo equipo tiene el cerrojo (`/tmp/wibox-video.lock`) y la sesion local la lleva el. | Nada que arreglar: el cerrojo esta haciendo su trabajo. |
 | `video_session: true` con contadores a cero | Hay un reproductor conectado pero el timbre aun no manda nada. | Esperar, se llenara cuando despierte. |
 | `last_open.rc: 0` | La puerta se abrio. | Nada. |
 | `last_open.rc: -10029` | El PIN de apertura fue rechazado. | Corregir `WIBOX_UNLOCK_PASSWORD`. |
