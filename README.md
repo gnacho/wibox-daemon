@@ -205,6 +205,10 @@ Home Assistant no longer takes a generic camera in YAML and the config flow
 validates by opening the stream, so the entry can only be created once the
 stream carries a keyframe. `deploy/camera-creation.md` has the exact calls,
 including the mandatory `advanced` block.
+`deploy/create-camera-when-ready.sh` does the waiting for you: it polls
+`/status`, prints `video_pending` each round so a sleeping doorbell is easy to
+tell from a stream without a picture, and creates the entry the first time
+`video_keyframes` moves above zero. It is idempotent.
 
 ## Home Assistant add-on
 
