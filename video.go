@@ -15,6 +15,13 @@ import (
 // paquete ilegible avanza un byte para resincronizar: sin eso el bucle no
 // progresa nunca cuando el descifrado no da un tamano creible.
 func consumeQuiiPackets(key, buf []byte) ([]mediaFrame, []byte) {
+	return consumeQuiiPacketsWith(key, buf, nil)
+}
+
+// consumeQuiiPacketsWith es igual pero entrega cada paquete decodificado a
+// onPacket antes de demuxear. Sirve para atender respuestas del canal
+// transparente (la apertura) sin perderlas entre la media.
+func consumeQuiiPacketsWith(key, buf []byte, onPacket func(*packet)) ([]mediaFrame, []byte) {
 	var frames []mediaFrame
 	// Una cabecera basura puede declarar un tamano grande pero creible y dejar
 	// el bucle esperando bytes que no llegan nunca. Si el buffer ya es grande y
@@ -38,6 +45,9 @@ func consumeQuiiPackets(key, buf []byte) ([]mediaFrame, []byte) {
 			continue
 		}
 		buf = buf[used:]
+		if onPacket != nil {
+			onPacket(p)
+		}
 		if len(p.Media) > 0 {
 			frames = append(frames, demuxMedia(p.Media)...)
 		}
@@ -84,6 +94,53 @@ func runVideo(cfg config, session string, key []byte, password string, out io.Wr
 	t.start()
 	defer t.close()
 
+	ready := make(chan struct{})
+	var readyOnce sync.Once
+
+	// La apertura se hace por esta misma sesion: el timbre solo admite una y
+	// mientras dura el video la API no puede montar otro tunel.
+	transparent := make(chan []byte, 16)
+	var unlockMu sync.Mutex
+	var ctl *controlServer
+	if cfg.pin != "" {
+		unlock := func() (int, error) {
+			unlockMu.Lock()
+			defer unlockMu.Unlock()
+			// Se arranca antes de tener la sesion lista para que la API no
+			// monte otro tunel mientras este se esta montando (es justo la
+			// ventana en la que se peleaban por el timbre).
+			select {
+			case <-ready:
+			case <-time.After(40 * time.Second):
+				return -1, fmt.Errorf("la sesion de video no esta lista")
+			}
+			pkt, perr := encryptPacket(key, 0xFE, unlockBody(cfg.pin, 1, 1), 4, 0, 0, 0, 0)
+			if perr != nil {
+				return -1, perr
+			}
+			// Se vacia lo que hubiera pendiente: una respuesta vieja no vale.
+			for len(transparent) > 0 {
+				<-transparent
+			}
+			if serr := t.sendQuii(pkt); serr != nil {
+				return -1, serr
+			}
+			select {
+			case resp := <-transparent:
+				return unlockResult(resp)
+			case <-time.After(15 * time.Second):
+				return -1, fmt.Errorf("timeout esperando la respuesta de apertura")
+			}
+		}
+		if srv, serr := newControlServer(controlSockPath(""), unlock); serr != nil {
+			log.Printf("video: sin canal de apertura: %v", serr)
+		} else {
+			ctl = srv
+			defer ctl.close()
+			log.Printf("video: canal de apertura en %s", srv.path)
+		}
+	}
+
 	if err := t.awaitConnected(20 * time.Second); err != nil {
 		return err
 	}
@@ -105,6 +162,7 @@ func runVideo(cfg config, session string, key []byte, password string, out io.Wr
 	if err := t.sendQuiiPlay(); err != nil {
 		return err
 	}
+	readyOnce.Do(func() { close(ready) })
 	log.Printf("video: play enviado, esperando frames")
 
 	// Keepalive cada 10 s, igual que el cliente oficial. Sin esto el timbre no
@@ -229,7 +287,16 @@ func runVideo(cfg config, session string, key []byte, password string, out io.Wr
 				log.Printf("video: %d bytes recibidos, %d frames, %d sin parsear", rawBytes, videoFrames, len(buf))
 			}
 			var frames []mediaFrame
-			frames, buf = consumeQuiiPackets(key, buf)
+			frames, buf = consumeQuiiPacketsWith(key, buf, func(p *packet) {
+				// Solo las respuestas a la orden 4 (apertura): otros
+				// transparentes podrian confundirse con ella.
+				if p.Type == 0xFE && (p.B13 == 4 || p.B14 == 4) {
+					select {
+					case transparent <- p.Command:
+					default:
+					}
+				}
+			})
 			for _, f := range frames {
 				// El audio no depende de un keyframe: se emite desde el
 				// principio, asi se oye al visitante aunque el IDR tarde.

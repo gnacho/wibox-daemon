@@ -28,6 +28,21 @@ func waitQuiiSetup(in <-chan []byte, timeout time.Duration) ([]byte, error) {
 	}
 }
 
+// unlockResult traduce la respuesta del canal transparente a un codigo: 0 es
+// exito, -10029 contrasena rechazada y -1 cualquier otro rechazo.
+func unlockResult(resp []byte) (int, error) {
+	if len(resp) < 2 {
+		return -1, fmt.Errorf("respuesta de apertura corta: % x", resp)
+	}
+	if resp[0] == 0 {
+		return 0, nil
+	}
+	if resp[1] == 2 {
+		return -10029, fmt.Errorf("contrasena de apertura rechazada")
+	}
+	return -1, fmt.Errorf("apertura rechazada: % x", resp)
+}
+
 // remoteOpen abre la puerta por la cadena remota propia: tunel RB-UDP hasta el
 // timbre y la misma orden QUII que por LAN. No depende del movil ni del SDK
 // del fabricante.
@@ -114,16 +129,7 @@ func remoteOpen(cfg config, session string, key []byte, password string) (int, e
 				if p.Type != 0xFE || (p.B13 != 4 && p.B14 != 4) {
 					continue
 				}
-				if len(p.Command) < 2 {
-					return -1, fmt.Errorf("respuesta de apertura corta: % x", p.Command)
-				}
-				if p.Command[0] == 0 {
-					return 0, nil
-				}
-				if p.Command[1] == 2 {
-					return -10029, fmt.Errorf("contrasena de apertura rechazada")
-				}
-				return -1, fmt.Errorf("apertura rechazada: % x", p.Command)
+				return unlockResult(p.Command)
 			}
 		case <-deadline:
 			return -1, fmt.Errorf("timeout esperando la respuesta de apertura")

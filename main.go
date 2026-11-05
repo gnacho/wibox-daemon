@@ -38,6 +38,10 @@ type config struct {
 	// remoteBudget acota el tiempo total buscando el timbre. Tiene que caber
 	// dentro del timeout del rest_command de Home Assistant.
 	remoteBudget time.Duration
+
+	// controlSock es el socket donde el proceso de video atiende peticiones
+	// de apertura. Vacio = /tmp/wibox-video.sock.
+	controlSock string
 }
 
 func env(key, def string) string {
@@ -82,6 +86,7 @@ func loadConfig() config {
 		remoteAttempts: attempts,
 		remotePoll:     time.Duration(poll) * time.Second,
 		remoteBudget:   time.Duration(budget) * time.Second,
+		controlSock:    env("WIBOX_CONTROL_SOCK", ""),
 	}
 }
 
@@ -161,6 +166,16 @@ func (d *daemon) openDoor(deviceID string) (int, string, error) {
 		return -1, "", fmt.Errorf("data-encode-key de %d bytes, se esperaban 32", len(key))
 	}
 	password := encodeDevicePassword(token.AuthCode)
+
+	// Si go2rtc tiene el stream abierto, la unica sesion del timbre la tiene
+	// el proceso de video. Se le pide la apertura por su socket en vez de
+	// montar otro tunel que solo conseguiria un BUSY.
+	if rc, handled, cerr := controlUnlock(d.cfg.controlSock); handled {
+		if cerr == nil {
+			log.Printf("open %s rc=0 por la sesion de video", deviceID)
+		}
+		return rc, token.Expired, cerr
+	}
 
 	// La via local va primero: es mas rapida y el video no sale del edificio.
 	if d.cfg.lanAddr != "" && !d.cfg.remoteOnly {

@@ -75,6 +75,7 @@ Everything through environment variables (or a systemd `EnvironmentFile`):
 | `WIBOX_MPEGTS` | `1` muxes video and G.711A audio into MPEG-TS, so one `exec:` pipe carries both |
 | `WIBOX_AUDIO_FILE` | Writes the raw G.711A audio to that file instead of stderr |
 | `WIBOX_PLAY_RESENDS` | Times the play is resent while waiting for a keyframe (defaults to `3`, `0` disables it) |
+| `WIBOX_CONTROL_SOCK` | Unix socket where the video process takes door-opening requests (default `/tmp/wibox-video.sock`) |
 | `WIBOX_DEBUG` | Any value enables HTTP and MQTT traces |
 
 A configuration file can also be passed with `-config <file>`. That is how
@@ -123,6 +124,12 @@ curl -H "Authorization: Bearer $WIBOX_API_TOKEN" http://192.168.1.50:8087/device
 curl -H "Authorization: Bearer $WIBOX_API_TOKEN" \
      "http://192.168.1.50:8087/open?device=23123csfewyk"
 ```
+
+The doorbell only accepts one QUII session at a time. When go2rtc is already
+streaming, the video process owns it, so the API asks that process to open the
+door through a local unix socket instead of starting a second tunnel (which
+would only get a BUSY answer). If no stream is running, `/open` builds its own
+tunnel as usual.
 
 ## Video in Home Assistant
 

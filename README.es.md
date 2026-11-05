@@ -73,6 +73,7 @@ Todo por variables de entorno (o un fichero `EnvironmentFile` de systemd):
 | `WIBOX_MPEGTS` | `1` muxea video y audio G.711A en MPEG-TS, para que un solo pipe `exec:` lleve los dos |
 | `WIBOX_AUDIO_FILE` | Escribe el audio G.711A crudo en ese fichero en vez de stderr |
 | `WIBOX_PLAY_RESENDS` | Veces que se reenvia el play esperando keyframe (por defecto `3`, `0` lo desactiva) |
+| `WIBOX_CONTROL_SOCK` | Socket unix donde el proceso de video atiende las peticiones de apertura (por defecto `/tmp/wibox-video.sock`) |
 | `WIBOX_DEBUG` | Cualquier valor activa trazas HTTP y MQTT |
 
 La configuracion tambien se puede pasar con `-config <fichero>`. Asi es como lo
@@ -119,6 +120,12 @@ curl -H "Authorization: Bearer $WIBOX_API_TOKEN" http://192.168.1.50:8087/device
 curl -H "Authorization: Bearer $WIBOX_API_TOKEN" \
      "http://192.168.1.50:8087/open?device=23123csfewyk"
 ```
+
+El timbre solo admite una sesion QUII a la vez. Cuando go2rtc ya esta
+emitiendo, la sesion la tiene el proceso de video, asi que la API le pide la
+apertura por un socket unix local en vez de montar un segundo tunel (que solo
+recibiria un BUSY). Si no hay stream en curso, `/open` monta su propio tunel
+como siempre.
 
 ## Video en Home Assistant
 
