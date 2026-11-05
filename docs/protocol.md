@@ -225,10 +225,11 @@ header plus a body, AES-256-CBC with an IV of 16 zeros and no padding. The
 SHA-256 of the clear header plus the body is appended to the body.
 
 Setup is 32 clear bytes with `0xA9` first. The reply must have `0xA9` at 0, `0`
-at 9, `2` at 10 and `1` at 11. Play uses user `adminapp2` and path
+at 9, `2` at 10 and `1` at 11. Play uses user `adminapp` and path
 `/mode=real&idc={channel}&ids={stream}&ap=2`, with the password from the token
-(`dynamic-password`, 108 chars, not the auth code). Keepalives are type `0x00`
-with an empty body every 10 s.
+(`dynamic-password`, 108 chars, not the auth code). The LAN session and the CGI
+use `adminapp2` instead; only the play inside the tunnel uses `adminapp`.
+Keepalives are type `0x00` with an empty body every 10 s.
 
 The unlock is transparent order 4: byte 0 lock number, byte 1 zero, byte 2
 channel, byte 3 `1`, then from byte 16 the SHA-256 hex of the PIN. Response
