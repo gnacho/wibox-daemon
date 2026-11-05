@@ -27,6 +27,7 @@ WIBOX_OPEN_COOLDOWN="$(value open_cooldown)"
 WIBOX_VIDEO_RETRY="$(value video_retry)"
 WIBOX_VIDEO_RETRY_MAX="$(value video_retry_max)"
 WIBOX_REMOTE_BUDGET="$(value remote_budget)"
+WIBOX_VIDEO_START_TIMEOUT="$(value video_start_timeout)"
 WIBOX_CLOUD_CHECK="$(value cloud_check)"
 WIBOX_VIDEO_MAX="$(value video_max)"
 WIBOX_PLAY_RESENDS="$(value play_resends)"
@@ -90,4 +91,5 @@ YAML
 # La API HTTP (apertura y estado) va en segundo plano; el proceso principal es
 # go2rtc.
 /usr/bin/wibox-daemon &
+sed -i "s/#starttimeout=[0-9]*/#starttimeout=${WIBOX_VIDEO_START_TIMEOUT:-300}/" "$G2R_CONFIG"
 exec /usr/bin/go2rtc -config "$G2R_CONFIG"
