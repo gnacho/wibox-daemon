@@ -22,3 +22,10 @@ jobs:
         run: go test -race -count=1 ./...
       - name: coverage
         run: go test -count=1 -coverprofile=cover.out ./... && go tool cover -func=cover.out | tail -1
+      - name: coverage floor
+        # Lo ganado no se pierde: si la cobertura total baja del umbral, el job
+        # falla. El numero se sube a mano cuando toque, no se baja.
+        run: |
+          total=$(go tool cover -func=cover.out | tail -1 | awk '{print $3}' | tr -d '%')
+          echo "cobertura total: ${total}%"
+          awk "BEGIN{exit !($total < 60)}" || { echo "por debajo del 60%"; exit 1; }
