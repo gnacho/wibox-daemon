@@ -187,6 +187,13 @@ Then add it to Home Assistant as a generic camera pointing at
   Note that `ffprobe` does not recognise A-law inside MPEG-TS (ffmpeg itself
   writes it as stream type `0x06`), so it is not a valid gate for that track.
 
+## Camera in Home Assistant
+
+Home Assistant no longer takes a generic camera in YAML and the config flow
+validates by opening the stream, so the entry can only be created once the
+stream carries a keyframe. `deploy/camera-creation.md` has the exact calls,
+including the mandatory `advanced` block.
+
 ## Home Assistant add-on
 
 Home Assistant OS cannot run a bare binary, so the daemon also ships as an

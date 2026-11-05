@@ -183,6 +183,13 @@ Despues se anade a Home Assistant como camara generica apuntando a
   Ojo: `ffprobe` no reconoce A-law dentro de MPEG-TS (el propio ffmpeg lo escribe
   como stream type `0x06`), asi que no sirve como gate de esa pista.
 
+## Camara en Home Assistant
+
+Home Assistant ya no acepta una camara generica por YAML y el config flow valida
+abriendo el stream, asi que la entrada solo se puede crear cuando el stream
+lleva un keyframe. `deploy/camera-creation.md` tiene las llamadas exactas,
+incluido el bloque `advanced` obligatorio.
+
 ## Add-on de Home Assistant
 
 Home Assistant OS no puede ejecutar un binario suelto, asi que el daemon tambien
