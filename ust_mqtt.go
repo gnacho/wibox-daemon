@@ -88,7 +88,11 @@ type ustMqttConfig struct {
 	// AwakePoll es la espera entre sondeos cuando el timbre esta dormido. Un
 	// portal comunitario pasa horas sin actividad, asi que un vigilante largo
 	// necesita un intervalo amplio para no saturar el broker.
-	AwakePoll  time.Duration
+	AwakePoll time.Duration
+	// Budget acota el tiempo total del bucle de p2pconnect. Sin el, las
+	// respuestas de "dormido" llegan en milisegundos y los intentos se
+	// agotan en medio minuto, justo cuando el timbre empieza a despertar.
+	Budget     time.Duration
 	ForceTrans int
 }
 
@@ -119,6 +123,9 @@ func newUserdata() string {
 func newUstMqtt(cfg ustMqttConfig) *ustMqtt {
 	if cfg.Attempts <= 0 {
 		cfg.Attempts = 20
+	}
+	if cfg.Budget <= 0 {
+		cfg.Budget = 240 * time.Second
 	}
 	if cfg.AwakePoll <= 0 {
 		cfg.AwakePoll = 3 * time.Second
@@ -625,7 +632,13 @@ func (m *ustMqtt) connectAndP2PConnect(localIPs []string, localUDPPort int, publ
 	requestSessionID := int64(rand.Uint32())
 
 	var info *p2pConnectInfo
-	for attempt := 1; attempt <= m.cfg.Attempts; attempt++ {
+	deadline := time.Now().Add(m.cfg.Budget)
+	attempt := 0
+	for attempt < m.cfg.Attempts {
+		if time.Now().After(deadline) {
+			break
+		}
+		attempt++
 		// El aoffline de sub-device-state no es fiable: medido el 5-nov-2026,
 		// el servidor daba el timbre por dormido en el mismo minuto en que
 		// otro cliente obtenia candidatos y abria el tunel. Por eso aqui se
@@ -659,6 +672,9 @@ func (m *ustMqtt) connectAndP2PConnect(localIPs []string, localUDPPort int, publ
 			if attempt == 1 || attempt%20 == 0 || debugOn() {
 				log.Printf("p2p: el servidor da el timbre por dormido, se reintenta igual, intento %d/%d", attempt, m.cfg.Attempts)
 			}
+			// Las respuestas de dormido llegan en milisegundos: sin esta
+			// espera los intentos se agotan antes de que el timbre despierte.
+			time.Sleep(m.cfg.AwakePoll)
 		}
 	}
 	if info == nil {

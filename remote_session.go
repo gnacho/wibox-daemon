@@ -95,6 +95,7 @@ func establishRemote(cfg config, session string) (*remoteSession, error) {
 		Session:   session,
 		Attempts:  cfg.remoteAttempts,
 		AwakePoll: cfg.remotePoll,
+		Budget:    cfg.remoteBudget,
 	})
 	info, sessionFlag, err := m.connectAndP2PConnect(localIPs, localPort, "")
 	if err != nil {

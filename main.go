@@ -35,6 +35,9 @@ type config struct {
 	remoteAttempts int
 	// remotePoll es la espera entre sondeos con el timbre dormido.
 	remotePoll time.Duration
+	// remoteBudget acota el tiempo total buscando el timbre. Tiene que caber
+	// dentro del timeout del rest_command de Home Assistant.
+	remoteBudget time.Duration
 }
 
 func env(key, def string) string {
@@ -52,6 +55,10 @@ func loadConfig() config {
 	attempts, _ := strconv.Atoi(env("WIBOX_REMOTE_ATTEMPTS", "20"))
 	if attempts < 1 {
 		attempts = 20
+	}
+	budget, _ := strconv.Atoi(env("WIBOX_REMOTE_BUDGET", "240"))
+	if budget < 10 {
+		budget = 240
 	}
 	poll, _ := strconv.Atoi(env("WIBOX_AWAKE_POLL", "3"))
 	if poll < 1 {
@@ -74,6 +81,7 @@ func loadConfig() config {
 		remoteOnly:     env("WIBOX_REMOTE_ONLY", "0") == "1",
 		remoteAttempts: attempts,
 		remotePoll:     time.Duration(poll) * time.Second,
+		remoteBudget:   time.Duration(budget) * time.Second,
 	}
 }
 
