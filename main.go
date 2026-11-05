@@ -42,6 +42,9 @@ type config struct {
 	// controlSock es el socket donde el proceso de video atiende peticiones
 	// de apertura. Vacio = /tmp/wibox-video.sock.
 	controlSock string
+	// cloudCheck es cada cuanto se comprueba el login y la lista contra el
+	// cloud para publicarlo en /status. 0 lo desactiva.
+	cloudCheck time.Duration
 }
 
 func env(key, def string) string {
@@ -65,6 +68,7 @@ func loadConfig() config {
 		budget = 240
 	}
 	poll, _ := strconv.Atoi(env("WIBOX_AWAKE_POLL", "3"))
+	cloudEvery, _ := strconv.Atoi(env("WIBOX_CLOUD_CHECK", "600"))
 	if poll < 1 {
 		poll = 3
 	}
@@ -85,6 +89,7 @@ func loadConfig() config {
 		remoteOnly:     env("WIBOX_REMOTE_ONLY", "0") == "1",
 		remoteAttempts: attempts,
 		remotePoll:     time.Duration(poll) * time.Second,
+		cloudCheck:     time.Duration(cloudEvery) * time.Second,
 		remoteBudget:   time.Duration(budget) * time.Second,
 		controlSock:    env("WIBOX_CONTROL_SOCK", ""),
 	}
@@ -111,6 +116,13 @@ type daemon struct {
 	started  time.Time
 	statusMu sync.Mutex
 	lastOpen *openRecord
+
+	// Ultimo chequeo de la cadena cloud. Se refresca en segundo plano para
+	// que /status pueda avisar de unas credenciales caducadas sin pagar un
+	// login en cada consulta.
+	cloudOK  bool
+	cloudErr string
+	cloudAt  time.Time
 }
 
 func (d *daemon) recordOpen(deviceID, via string, rc int, err error) {
@@ -121,6 +133,39 @@ func (d *daemon) recordOpen(deviceID, via string, rc int, err error) {
 		rec.Error = err.Error()
 	}
 	d.lastOpen = rec
+}
+
+func (d *daemon) recordCloud(ok bool, err error) {
+	d.statusMu.Lock()
+	defer d.statusMu.Unlock()
+	d.cloudOK = ok
+	d.cloudAt = time.Now().UTC()
+	if err != nil {
+		d.cloudErr = err.Error()
+	} else {
+		d.cloudErr = ""
+	}
+}
+
+func (d *daemon) cloudState() (bool, string, time.Time) {
+	d.statusMu.Lock()
+	defer d.statusMu.Unlock()
+	return d.cloudOK, d.cloudErr, d.cloudAt
+}
+
+// watchCloud comprueba cada intervalo que el login y la lista de dispositivos
+// siguen respondiendo. Si no, /status lo dice y Home Assistant puede avisar.
+func (d *daemon) watchCloud(interval time.Duration) {
+	for {
+		if err := d.login(); err != nil {
+			d.recordCloud(false, err)
+		} else if _, err := d.auth.DeviceList(); err != nil {
+			d.recordCloud(false, err)
+		} else {
+			d.recordCloud(true, nil)
+		}
+		time.Sleep(interval)
+	}
 }
 
 func (d *daemon) lastOpenCopy() *openRecord {
@@ -293,6 +338,14 @@ func (d *daemon) routes() http.Handler {
 		// dependa de que el sensor cambie de forma.
 		out["video_frames"] = frames
 		out["video_keyframes"] = keys
+		ok, cerr, at := d.cloudState()
+		out["cloud_ok"] = ok
+		if cerr != "" {
+			out["cloud_error"] = cerr
+		}
+		if !at.IsZero() {
+			out["cloud_checked"] = at
+		}
 		d.writeJSON(w, 200, out)
 	})
 	mux.HandleFunc("/devices", func(w http.ResponseWriter, r *http.Request) {
@@ -514,6 +567,10 @@ func main() {
 		}
 		log.Printf("precalentado: sesion y servicios listos")
 	}()
+
+	if cfg.cloudCheck > 0 {
+		go d.watchCloud(cfg.cloudCheck)
+	}
 
 	addr := fmt.Sprintf("0.0.0.0:%d", cfg.apiPort)
 	log.Printf("wibox-daemon escuchando en %s (token %s)", addr, maskToken(cfg.apiToken))

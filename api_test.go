@@ -308,3 +308,54 @@ func TestOpenFallsBackWhenVideoSessionFails(t *testing.T) {
 		t.Fatalf("se esperaba la via directa, llamadas=%d", direct)
 	}
 }
+
+func TestStatusReportsCloudState(t *testing.T) {
+	d := newTestDaemon(nil)
+	d.recordCloud(true, nil)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/status", nil)
+	req.Header.Set("Authorization", "Bearer secreto")
+	d.routes().ServeHTTP(rec, req)
+
+	if rec.Code != 200 {
+		t.Fatalf("codigo %d", rec.Code)
+	}
+	var got map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("json: %v", err)
+	}
+	if ok, _ := got["cloud_ok"].(bool); !ok {
+		t.Fatalf("cloud_ok=%v, se esperaba true", got["cloud_ok"])
+	}
+	if _, existe := got["cloud_checked"]; !existe {
+		t.Fatal("falta cloud_checked tras una comprobacion")
+	}
+	if _, existe := got["cloud_error"]; existe {
+		t.Fatalf("cloud_error no deberia ir cuando no hay error: %v", got["cloud_error"])
+	}
+}
+
+func TestStatusReportsCloudFailure(t *testing.T) {
+	d := newTestDaemon(nil)
+	d.recordCloud(false, errors.New("login rechazado"))
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/status", nil)
+	req.Header.Set("Authorization", "Bearer secreto")
+	d.routes().ServeHTTP(rec, req)
+
+	if rec.Code != 200 {
+		t.Fatalf("codigo %d", rec.Code)
+	}
+	var got map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("json: %v", err)
+	}
+	if ok, _ := got["cloud_ok"].(bool); ok {
+		t.Fatal("cloud_ok deberia ser false")
+	}
+	if msg, _ := got["cloud_error"].(string); msg == "" {
+		t.Fatal("falta cloud_error con el motivo")
+	}
+}
