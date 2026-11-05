@@ -70,6 +70,7 @@ Everything through environment variables (or a systemd `EnvironmentFile`):
 | `WIBOX_REMOTE` | `0` disables the remote path (enabled by default) |
 | `WIBOX_REMOTE_ONLY` | `1` skips the local path even when `WIBOX_LAN_ADDR` is set |
 | `WIBOX_REMOTE_ATTEMPTS` | `p2pconnect` attempts (defaults to `20`, 12 s each) |
+| `WIBOX_REMOTE_BUDGET` | Seconds the daemon keeps looking for the doorbell before giving up (default `240`) |
 | `WIBOX_AWAKE_POLL` | Seconds between probes while the doorbell sleeps (defaults to `3`) |
 | `WIBOX_VIDEO_WAIT` | Seconds without frames before cutting the video (defaults to `20`) |
 | `WIBOX_MPEGTS` | `1` muxes video and G.711A audio into MPEG-TS, so one `exec:` pipe carries both |
