@@ -230,6 +230,7 @@ func runVideo(cfg config, session string, key []byte, password string, out io.Wr
 		ts = newTSMuxer(out)
 		log.Printf("video: salida MPEG-TS con pistas H264 y G711A")
 	}
+
 	waitingIDR := true
 	// Los parametros se escriben con el primer frame, no con el primer keyframe:
 	// el MPEG-TS anuncia asi una pista H.264 valida desde el principio y la
@@ -245,6 +246,13 @@ func runVideo(cfg config, session string, key []byte, password string, out io.Wr
 		}
 		_, err := out.Write(params)
 		return err
+	}
+	// El tubo tiene que soltar bytes ya: quien valida el stream abre y espera
+	// pocos segundos, y hasta que el tunel conecta no hay frames. Con PAT, PMT
+	// y los parametros escritos de entrada, el transporte anuncia H.264 desde
+	// el primer byte y la validacion no depende de que el timbre despierte.
+	if err := writeParams(0); err != nil {
+		return fmt.Errorf("escribiendo cabecera del stream: %w", err)
 	}
 	nalCensus := map[int]int{}
 	skipped := 0

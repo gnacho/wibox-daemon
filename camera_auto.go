@@ -66,7 +66,7 @@ func (c *cameraAuto) stillURL() string {
 	if u, err := url.Parse(c.stream); err == nil && u.Hostname() != "" {
 		host = u.Hostname()
 	}
-	return fmt.Sprintf("http://%s:%d/health", host, c.apiPort)
+	return fmt.Sprintf("http://%s:%d/snapshot.jpg", host, c.apiPort)
 }
 
 // exists mira si ya hay una camara con "wibox" en el nombre: la integracion no

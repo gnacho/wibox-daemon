@@ -49,7 +49,7 @@ func TestCameraAutoCreatesTheEntry(t *testing.T) {
 	if captured["stream_source"] != "rtsp://192.168.1.244:8556/wibox" {
 		t.Fatalf("stream_source=%v", captured["stream_source"])
 	}
-	if captured["still_image_url"] != "http://192.168.1.244:8087/health" {
+	if captured["still_image_url"] != "http://192.168.1.244:8087/snapshot.jpg" {
 		t.Fatalf("still_image_url=%v", captured["still_image_url"])
 	}
 	if _, ok := captured["advanced"]; !ok {

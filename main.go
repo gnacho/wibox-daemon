@@ -1,10 +1,14 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
+	"image"
+	"image/color"
+	"image/jpeg"
 	"io"
 	"log"
 	"net/http"
@@ -16,6 +20,11 @@ import (
 	"sync"
 	"syscall"
 	"time"
+)
+
+var (
+	placeholderOnce  sync.Once
+	placeholderBytes []byte
 )
 
 type config struct {
@@ -400,6 +409,15 @@ func (d *daemon) routes() http.Handler {
 				"/open":    "GET ?device=<id>, Authorization: Bearer <token>",
 			},
 		})
+	})
+	// Home Assistant pide una imagen fija para la camara y no acepta el JSON
+	// del health: sin una imagen de verdad el config flow responde
+	// invalid_still_image. Se sirve un JPEG de relleno mientras el timbre no
+	// mande imagen de verdad.
+	mux.HandleFunc("/snapshot.jpg", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "image/jpeg")
+		w.Header().Set("Cache-Control", "no-store")
+		w.Write(placeholderJPEG())
 	})
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		d.writeJSON(w, 200, map[string]any{"ok": true})
@@ -805,4 +823,26 @@ func orNone(v string) string {
 		return "no configurada y la via remota esta desactivada"
 	}
 	return v
+}
+
+// placeholderJPEG dibuja un JPEG sencillo para la imagen fija de la camara:
+// fondo oscuro con una franja clara, del tamano tipico de un videoportero.
+func placeholderJPEG() []byte {
+	placeholderOnce.Do(func() {
+		img := image.NewRGBA(image.Rect(0, 0, 352, 288))
+		for y := 0; y < 288; y++ {
+			for x := 0; x < 352; x++ {
+				c := color.RGBA{0x1e, 0x1e, 0x22, 0xff}
+				if y > 120 && y < 168 {
+					c = color.RGBA{0x3a, 0x3a, 0x42, 0xff}
+				}
+				img.Set(x, y, c)
+			}
+		}
+		var buf bytes.Buffer
+		if err := jpeg.Encode(&buf, img, &jpeg.Options{Quality: 70}); err == nil {
+			placeholderBytes = buf.Bytes()
+		}
+	})
+	return placeholderBytes
 }
