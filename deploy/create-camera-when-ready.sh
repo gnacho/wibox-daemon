@@ -109,5 +109,14 @@ while :; do
     log "sin imagen en $round rondas"
     exit 1
   fi
-  sleep "$POLL"
+  # Espera creciente: las primeras rondas van a ritmo normal, pero un timbre
+  # que lleva horas dormido no merece que le tiremos del stream cada minuto;
+  # cada tirada ocupa su unica sesion QUII y abrir la puerta manda mas.
+  if [ "$round" -ge 20 ]; then
+    sleep 300
+  elif [ "$round" -ge 10 ]; then
+    sleep 180
+  else
+    sleep "$POLL"
+  fi
 done
