@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
@@ -10,7 +11,10 @@ import (
 
 func newTestDaemon(open func(string) (int, string, error)) *daemon {
 	return &daemon{
-		cfg:      config{apiToken: "secreto", deviceID: "dev-por-defecto"},
+		// Socket de control propio: en la maquina de desarrollo puede haber un
+		// vigilante con el socket por defecto y el test lo confundiria con una
+		// sesion de video.
+		cfg:      config{apiToken: "secreto", deviceID: "dev-por-defecto", controlSock: "/tmp/wibox-test-sin-video.sock"},
 		openFunc: open,
 	}
 }
@@ -132,7 +136,7 @@ func TestOpenUsesVideoSession(t *testing.T) {
 	srv, err := newControlServer(sock, func() (int, error) {
 		calls++
 		return 0, nil
-	})
+	}, nil)
 	if err != nil {
 		t.Fatalf("servidor de control: %v", err)
 	}
@@ -206,5 +210,41 @@ func TestStatusRequiresToken(t *testing.T) {
 	d.routes().ServeHTTP(rec, httptest.NewRequest("GET", "/status", nil))
 	if rec.Code != 401 {
 		t.Fatalf("codigo %d, esperaba 401", rec.Code)
+	}
+}
+
+func TestStatusReportsVideoFrames(t *testing.T) {
+	sock := t.TempDir() + "/video.sock"
+	srv, err := newControlServer(sock, func() (int, error) { return 0, nil }, func() (int, int) { return 120, 4 })
+	if err != nil {
+		t.Fatalf("servidor: %v", err)
+	}
+	defer srv.close()
+
+	d := newTestDaemon(nil)
+	d.cfg.controlSock = sock
+	srvHTTP := httptest.NewServer(d.routes())
+	defer srvHTTP.Close()
+
+	req, _ := http.NewRequest("GET", srvHTTP.URL+"/status", nil)
+	req.Header.Set("Authorization", "Bearer secreto")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("status: %v", err)
+	}
+	defer resp.Body.Close()
+	var got struct {
+		VideoSession bool `json:"video_session"`
+		VideoFrames  int  `json:"video_frames"`
+		VideoKeys    int  `json:"video_keyframes"`
+	}
+	if derr := json.NewDecoder(resp.Body).Decode(&got); derr != nil {
+		t.Fatalf("json: %v", derr)
+	}
+	if !got.VideoSession {
+		t.Fatal("se esperaba sesion de video")
+	}
+	if got.VideoFrames != 120 || got.VideoKeys != 4 {
+		t.Fatalf("frames=%d keys=%d", got.VideoFrames, got.VideoKeys)
 	}
 }

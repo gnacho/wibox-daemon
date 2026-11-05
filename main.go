@@ -274,13 +274,22 @@ func (d *daemon) routes() http.Handler {
 			d.writeJSON(w, 401, map[string]any{"error": "unauthorized"})
 			return
 		}
-		d.writeJSON(w, 200, map[string]any{
+		// Una sola consulta al canal de control: dice si hay sesion viva y
+		// cuanto video lleva, para que Home Assistant sepa si ya puede
+		// decodificar algo.
+		frames, keys, session := controlStats(d.cfg.controlSock)
+		out := map[string]any{
 			"service":       "wibox-daemon",
 			"version":       version,
 			"uptime_s":      int(time.Since(d.started).Seconds()),
-			"video_session": controlPing(d.cfg.controlSock),
+			"video_session": session,
 			"last_open":     d.lastOpenCopy(),
-		})
+		}
+		if session {
+			out["video_frames"] = frames
+			out["video_keyframes"] = keys
+		}
+		d.writeJSON(w, 200, out)
 	})
 	mux.HandleFunc("/devices", func(w http.ResponseWriter, r *http.Request) {
 		if !d.authOK(r) {

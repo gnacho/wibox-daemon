@@ -7,6 +7,7 @@ import (
 	"os"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -102,6 +103,9 @@ func runVideo(cfg config, session string, key []byte, password string, out io.Wr
 	transparent := make(chan []byte, 16)
 	var unlockMu sync.Mutex
 	var ctl *controlServer
+	// Contadores publicados por el canal de control (otra gorutina): van en
+	// atomicos para no tener carreras con el bucle de frames.
+	var vfCount, kfCount atomic.Int64
 	if cfg.pin != "" {
 		unlock := func() (int, error) {
 			unlockMu.Lock()
@@ -132,7 +136,10 @@ func runVideo(cfg config, session string, key []byte, password string, out io.Wr
 				return -1, fmt.Errorf("timeout esperando la respuesta de apertura")
 			}
 		}
-		if srv, serr := newControlServer(controlSockPath(""), unlock); serr != nil {
+		stats := func() (int, int) {
+			return int(vfCount.Load()), int(kfCount.Load())
+		}
+		if srv, serr := newControlServer(controlSockPath(""), unlock, stats); serr != nil {
 			log.Printf("video: sin canal de apertura: %v", serr)
 		} else {
 			ctl = srv
@@ -392,8 +399,10 @@ func runVideo(cfg config, session string, key []byte, password string, out io.Wr
 						return fmt.Errorf("escribiendo video: %w", err)
 					}
 					videoFrames++
+					vfCount.Store(int64(videoFrames))
 					if f.KeyFrame {
 						keyFrames++
+						kfCount.Store(int64(keyFrames))
 					}
 					if firstFrame {
 						firstFrame = false

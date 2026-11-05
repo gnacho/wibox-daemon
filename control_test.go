@@ -24,7 +24,7 @@ func TestControlServerUnlocks(t *testing.T) {
 	srv, err := newControlServer(path, func() (int, error) {
 		called++
 		return 0, nil
-	})
+	}, nil)
 	if err != nil {
 		t.Fatalf("servidor: %v", err)
 	}
@@ -49,7 +49,7 @@ func TestControlServerReportsRejection(t *testing.T) {
 	path := testSockPath(t)
 	srv, err := newControlServer(path, func() (int, error) {
 		return -10029, errPinRejected
-	})
+	}, nil)
 	if err != nil {
 		t.Fatalf("servidor: %v", err)
 	}
@@ -82,7 +82,7 @@ func TestControlServerReplacesStaleSocket(t *testing.T) {
 	if err := os.WriteFile(path, nil, 0o600); err != nil {
 		t.Fatalf("socket viejo: %v", err)
 	}
-	srv, err := newControlServer(path, func() (int, error) { return 0, nil })
+	srv, err := newControlServer(path, func() (int, error) { return 0, nil }, nil)
 	if err != nil {
 		t.Fatalf("debía sustituir el socket huerfano: %v", err)
 	}
@@ -95,7 +95,7 @@ func TestControlServerReplacesStaleSocket(t *testing.T) {
 
 func TestControlServerRejectsUnknownCommand(t *testing.T) {
 	path := testSockPath(t)
-	srv, err := newControlServer(path, func() (int, error) { return 0, nil })
+	srv, err := newControlServer(path, func() (int, error) { return 0, nil }, nil)
 	if err != nil {
 		t.Fatalf("servidor: %v", err)
 	}
@@ -132,7 +132,7 @@ func TestControlPingDoesNotUnlock(t *testing.T) {
 	srv, err := newControlServer(path, func() (int, error) {
 		calls++
 		return 0, nil
-	})
+	}, nil)
 	if err != nil {
 		t.Fatalf("servidor: %v", err)
 	}
@@ -149,5 +149,35 @@ func TestControlPingDoesNotUnlock(t *testing.T) {
 func TestControlPingWithoutServer(t *testing.T) {
 	if controlPing(testSockPath(t)) {
 		t.Fatal("sin servidor el ping debe ser falso")
+	}
+}
+
+func TestControlStatsDoesNotUnlock(t *testing.T) {
+	sock := testSockPath(t)
+	calls := 0
+	srv, err := newControlServer(sock, func() (int, error) {
+		calls++
+		return 0, nil
+	}, func() (int, int) { return 42, 3 })
+	if err != nil {
+		t.Fatalf("servidor: %v", err)
+	}
+	defer srv.close()
+
+	frames, keys, ok := controlStats(sock)
+	if !ok {
+		t.Fatal("stats no encontro el servidor")
+	}
+	if frames != 42 || keys != 3 {
+		t.Fatalf("stats frames=%d keys=%d", frames, keys)
+	}
+	if calls != 0 {
+		t.Fatalf("stats abrio la puerta %d veces", calls)
+	}
+}
+
+func TestControlStatsWithoutServer(t *testing.T) {
+	if _, _, ok := controlStats(testSockPath(t)); ok {
+		t.Fatal("sin servidor no deberia haber stats")
 	}
 }
