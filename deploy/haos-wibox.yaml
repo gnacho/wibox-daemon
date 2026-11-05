@@ -1,26 +1,86 @@
-# Home Assistant: open the door with the daemon, without depending on the phone.
-# Replace the IP and the token with your own.
+# Home Assistant package that mirrors what this project actually runs.
+#
+# Copy it to /config/packages/ (or include it from configuration.yaml) and
+# replace the three placeholders: the host running the daemon, the API token
+# and the device id.
+#
+# The daemon listens on 8087, and when it ships as the add-on its bundled
+# go2rtc serves the camera stream on 8556 (see deploy/go2rtc.yaml and the add-on
+# section of the README).
 
 rest_command:
-  wibox_open:
-    url: "http://192.168.1.50:8087/open?device=23123csfewyk"
+  wibox_abrir:
+    url: "http://192.168.1.50:8087/open?device=DEVICE_ID"
     method: GET
     headers:
-      Authorization: "Bearer CHANGE_ME"
-    timeout: 30
+      Authorization: "Bearer CAMBIA_EL_TOKEN"
+    # Generous on purpose: the doorbell sleeps on batteries and the daemon
+    # spends about four minutes looking for it before giving up.
+    timeout: 300
 
-sensor:
-  - platform: rest
-    name: Wibox
-    resource: "http://192.168.1.50:8087/devices"
+rest:
+  - resource: "http://192.168.1.50:8087/devices"
     headers:
-      Authorization: "Bearer CHANGE_ME"
-    value_template: >-
-      {% set d = value_json.devices[0] if value_json.devices else None %}
-      {{ 'online' if d else 'offline' }}
-    json_attributes_path: "$.devices[0]"
-    json_attributes:
-      - id
-      - name
-      - model
-    scan_interval: 60
+      Authorization: "Bearer CAMBIA_EL_TOKEN"
+    scan_interval: 120
+    timeout: 30
+    sensor:
+      - name: "Wibox"
+        unique_id: wibox_estado
+        icon: mdi:doorbell-video
+        value_template: >-
+          {% set d = value_json.devices[0] if value_json.devices else None %}
+          {{ "online" if d and d.online else "offline" }}
+        json_attributes:
+          - devices
+
+  # Video session and frame counters. The counters are always present, at zero
+  # when nothing is streaming, so templates do not have to guard for them.
+  - resource: "http://192.168.1.50:8087/status"
+    headers:
+      Authorization: "Bearer CAMBIA_EL_TOKEN"
+    scan_interval: 120
+    timeout: 30
+    sensor:
+      - name: "Wibox video estado"
+        unique_id: wibox_video_contadores
+        icon: mdi:video
+        value_template: >-
+          {{ "on" if value_json.video_session else "off" }}
+        json_attributes:
+          - version
+          - uptime_s
+          - last_open
+          - video_frames
+          - video_keyframes
+
+  # Health of the vendor cloud session: the daemon logs in on its own every
+  # WIBOX_CLOUD_CHECK seconds, so a dead session shows up here before somebody
+  # tries the door.
+  - resource: "http://192.168.1.50:8087/status"
+    headers:
+      Authorization: "Bearer CAMBIA_EL_TOKEN"
+    scan_interval: 300
+    timeout: 30
+    sensor:
+      - name: "Wibox cloud"
+        unique_id: wibox_cloud_estado
+        icon: mdi:cloud-check
+        value_template: >-
+          {{ "ok" if value_json.cloud_ok else "error" }}
+        json_attributes:
+          - cloud_checked
+          - cloud_error
+
+template:
+  - button:
+      - name: "Wibox abrir"
+        unique_id: wibox_abrir_boton
+        icon: mdi:door-open
+        press:
+          - action: rest_command.wibox_abrir
+
+# The camera cannot be declared here: in current Home Assistant the generic
+# camera is a config entry that validates the stream while creating it. See
+# deploy/camera-creation.md for the flow and the wrapper that waits for a
+# keyframe first.
