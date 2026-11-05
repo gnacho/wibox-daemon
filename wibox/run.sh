@@ -79,7 +79,7 @@ fi
 
 cat > "$G2R_CONFIG" <<'YAML'
 streams:
-  wibox: exec:/usr/bin/wibox-daemon -video -video-audio#killsignal=2#killtimeout=15#starttimeout=600
+  wibox: exec:/usr/bin/wibox-daemon -video -video-audio#killsignal=2#killtimeout=15#starttimeout=300
 api:
   listen: "127.0.0.1:1985"
 rtsp:
