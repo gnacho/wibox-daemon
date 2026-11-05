@@ -598,7 +598,10 @@ func main() {
 			log.Fatalf("login: %v", err)
 		}
 		var audioOut io.Writer
-		if *videoAudio {
+		// Con WIBOX_MPEGTS el audio ya viaja muxado en el TS de stdout, y
+		// go2rtc lee el stderr del proceso como log: duplicarlo ahi son
+		// megabytes de binario en su registro y en el nuestro.
+		if *videoAudio && !mpegtsEnabled() {
 			audioOut = os.Stderr
 		}
 		// Con WIBOX_AUDIO_FILE el audio G711A va a un fichero en vez de a

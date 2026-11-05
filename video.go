@@ -80,6 +80,26 @@ func annexBParams() []byte {
 	return out
 }
 
+// envFlag dice si una variable de entorno vale como un si: presente y distinta
+// de "0".
+func envFlag(name string) bool {
+	v := os.Getenv(name)
+	return v != "" && v != "0"
+}
+
+// mpegtsEnabled dice si la salida va muxada en MPEG-TS, con imagen y sonido en
+// el mismo tubo, en vez de H264 desnudo en stdout y el audio aparte.
+func mpegtsEnabled() bool {
+	return envFlag("WIBOX_MPEGTS")
+}
+
+// shouldSkipFrame dice si un frame de video se descarta antes de mandarlo al
+// consumidor: solo mientras no haya llegado un IDR y no se hayan pedido todos
+// los frames.
+func shouldSkipFrame(waitingIDR, keyFrame, allFrames bool) bool {
+	return waitingIDR && !keyFrame && !allFrames
+}
+
 // runVideo abre la cadena remota, arranca el play y escribe el bitstream H264 en
 // Annex-B por el writer. Es lo que consume go2rtc desde Home Assistant con un
 // origen exec, asi que no hace falta montar un servidor RTSP aqui.
@@ -105,12 +125,19 @@ func runVideo(cfg config, session string, key []byte, password string, out io.Wr
 	// unica forma de que go2rtc reciba imagen y sonido por el mismo pipe: dos
 	// fuentes exec no se mezclan, se tratan como failover.
 	var ts *tsMuxer
-	if v := os.Getenv("WIBOX_MPEGTS"); v != "" && v != "0" {
+	if mpegtsEnabled() {
 		ts = newTSMuxer(out)
 		log.Printf("video: salida MPEG-TS con pistas H264 y G711A")
 	}
 
 	waitingIDR := true
+	// El timbre puede tardar minuto y medio en mandar el primer IDR (GOP
+	// larguisimo, medido en la app oficial) o no mandarlo nunca en toda la
+	// sesion. Descartar hasta entonces deja al consumidor sin un solo paquete
+	// de video, que es lo que hacia fallar la validacion del stream en Home
+	// Assistant. Con esto se emiten igualmente: la imagen sale con el color
+	// roto hasta el IDR, pero hay imagen y el flujo es valido.
+	allFrames := envFlag("WIBOX_VIDEO_ALL_FRAMES")
 	// Los parametros se escriben con el primer frame, no con el primer keyframe:
 	// el MPEG-TS anuncia asi una pista H.264 valida desde el principio y la
 	// validacion del config flow de Home Assistant no depende de un IDR.
@@ -402,7 +429,7 @@ func runVideo(cfg config, session string, key []byte, password string, out io.Wr
 				}
 				if f.Video {
 					countNALTypes(f.Bitstream, nalCensus)
-					if waitingIDR && !f.KeyFrame {
+					if shouldSkipFrame(waitingIDR, f.KeyFrame, allFrames) {
 						skipped++
 						pendingCount.Store(int64(skipped))
 						if skipped <= 5 || skipped%100 == 0 {
