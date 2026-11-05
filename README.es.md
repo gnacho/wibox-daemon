@@ -89,6 +89,9 @@ Todo por variables de entorno (o un fichero `EnvironmentFile` de systemd):
 | `WIBOX_VIDEO_RETRY` | Espera base, en segundos, entre reconexiones de video antes de que el backoff doble (por defecto `5`) |
 | `WIBOX_VIDEO_RETRY_MAX` | Techo del backoff de reconexiones de video, en segundos (por defecto `60`) |
 | `WIBOX_VIDEO_START_TIMEOUT` | Segundos que go2rtc espera al productor de video antes de matarlo (por defecto `300`) |
+| `WIBOX_HA_URL` | URL base de Home Assistant para el alta automatica de la camara (vacio la desactiva) |
+| `WIBOX_HA_TOKEN` | Token de larga duracion de Home Assistant para crear la entrada de camara |
+| `WIBOX_HA_STREAM` | URL RTSP que Home Assistant debe guardar para la camara (vacio lo desactiva) |
 | `WIBOX_DEBUG` | Cualquier valor activa trazas HTTP y MQTT |
 
 La configuracion tambien se puede pasar con `-config <fichero>`. Asi es como lo

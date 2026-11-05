@@ -81,3 +81,24 @@ the last cloud check saw the bell offline. A second opening within
   protocol wakes it except a physical event or the official app.
 - The speaker channel only exists on the LAN. `-talk <wav>` works inside the
   building, not over the cloud tunnel.
+
+## The camera entry creates itself
+
+Home Assistant's generic camera integration validates the stream by opening it,
+so before the first keyframe the flow only answers `{"stream_source": "timeout"}`.
+The daemon knows when the picture arrives (the `video_keyframes` counter comes
+from the live video process), so it can create the entry at the right moment.
+
+Set three variables, or the matching add-on options, to turn it on:
+
+| Variable | Meaning |
+|---|---|
+| `WIBOX_HA_URL` | Base URL of Home Assistant, for example `http://192.168.1.244:8123` |
+| `WIBOX_HA_TOKEN` | Long lived access token with permission to create config entries |
+| `WIBOX_HA_STREAM` | RTSP URL the entry should point at, for example `rtsp://192.168.1.244:8556/wibox` |
+
+With any of them empty the feature is off and nothing changes. When all three
+are set, the daemon checks `/status` once a minute and, the first time
+`video_keyframes` goes above zero, creates the entry if it does not exist yet.
+The still image points at the daemon's own `/health`, so the card has something
+to show even when the doorbell sleeps again.

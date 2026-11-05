@@ -55,6 +55,11 @@ type config struct {
 	// cloudCheck es cada cuanto se comprueba el login y la lista contra el
 	// cloud para publicarlo en /status. 0 lo desactiva.
 	cloudCheck time.Duration
+	// haURL, haToken y haStream permiten que el daemon de de alta la camara en
+	// Home Assistant en cuanto haya imagen. Sin token o sin stream, no se toca.
+	haURL    string
+	haToken  string
+	haStream string
 }
 
 func env(key, def string) string {
@@ -101,6 +106,9 @@ func loadConfig() config {
 		remoteAttempts: attempts,
 		remotePoll:     time.Duration(poll) * time.Second,
 		cloudCheck:     time.Duration(cloudEvery) * time.Second,
+		haURL:          env("WIBOX_HA_URL", "http://homeassistant:8123"),
+		haToken:        env("WIBOX_HA_TOKEN", ""),
+		haStream:       env("WIBOX_HA_STREAM", ""),
 		openCooldown:   time.Duration(cooldown) * time.Second,
 		videoLock:      env("WIBOX_VIDEO_LOCK", ""),
 		remoteBudget:   time.Duration(budget) * time.Second,
@@ -733,6 +741,18 @@ func main() {
 
 	if cfg.cloudCheck > 0 {
 		go d.watchCloud(cfg.cloudCheck)
+
+		// Cuando Home Assistant tiene token y stream configurados, el daemon crea
+		// la entrada de camara en cuanto el video empieza a traer imagen: el flujo
+		// de la integracion valida abriendo el stream y antes del primer keyframe
+		// solo devuelve timeout.
+		if cfg.haToken != "" && cfg.haStream != "" {
+			camStop := make(chan struct{})
+			camSigs := make(chan os.Signal, 1)
+			signal.Notify(camSigs, syscall.SIGINT, syscall.SIGTERM)
+			go func() { <-camSigs; close(camStop) }()
+			go watchCameraEntry(cfg, time.Minute, camStop)
+		}
 	}
 
 	addr := fmt.Sprintf("0.0.0.0:%d", cfg.apiPort)
