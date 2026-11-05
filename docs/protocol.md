@@ -252,6 +252,15 @@ truncated by up to 15 bytes; keep it instead of dropping it.
 The stream carries no PPS and the bell only sends an IDR every ~90 s of stream,
 so a client joining mid-stream has to inject SPS/PPS and wait for a keyframe.
 
+Resending the PLAY with a fresh sequence number does **not** force a keyframe on
+this firmware. Measured with `WIBOX_PLAY_RESENDS=6` (one resend every 10 s over a
+long session): the NAL census stayed at `map[1:3455 7:145]`, that is 3455 P
+slices and 145 SPS, with no IDR and no PPS at all. There is no command in QUII,
+in the CGI or in the vendor SDK to ask for one, so the keyframe is up to the
+bell: either its own ~90 s schedule or a physical event. `/status` publishes
+`video_pending`, the frames already received that cannot be used yet, which is
+how you tell a stream carrying media without a picture from one that is silent.
+
 ## 9. Direct LAN mode
 
 When the daemon shares a network with the bell, none of the above is needed:
