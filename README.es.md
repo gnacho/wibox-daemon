@@ -223,25 +223,35 @@ Ajustes -> Add-ons -> Tienda de add-ons -> Repositorios
 instalar "Wibox Doorbell"
 ```
 
-Opciones: cuenta, contrasena, client id, id del dispositivo, pin de apertura,
-token de la API, intentos de p2pconnect, espera entre sondeos y espera de video.
-El add-on fuerza la cadena remota, asi que no se configura direccion local.
+Opciones: cuenta, contrasena, client id, id del dispositivo, pin de apertura y
+token de la API. Los tiempos se ajustan desde la propia pagina del add-on:
+`attempts`, `awake_poll`, `video_wait`, `video_max`, `play_resends`,
+`cloud_check`, `open_cooldown` y `video_retry`. El add-on fuerza la cadena
+remota, asi que no se configura direccion local.
 
 Desde Home Assistant:
 
 ```yaml
 rest_command:
-  wibox_open:
-    url: "http://homeassistant.local:8087/open"
+  wibox_abrir:
+    url: "http://homeassistant.local:8087/open?device=<device_id>"
     method: GET
     headers:
       Authorization: "Bearer <api_token>"
-    timeout: 120
+    timeout: 300
+  wibox_abrir_ya:
+    url: "http://homeassistant.local:8087/open?device=<device_id>&wait=0"
+    method: GET
+    headers:
+      Authorization: "Bearer <api_token>"
+    timeout: 30
 ```
 
-El timeout tiene que ser generoso: si el timbre duerme, el daemon reintenta hasta
-conseguir un peer y solo entonces abre. `WIBOX_REMOTE_ATTEMPTS` y la opcion
-`attempts` acotan esa espera.
+El primer comando espera: si el timbre duerme, el daemon reintenta hasta
+conseguir un peer y solo entonces abre, y `attempts` acota esa busqueda. El
+segundo, con `wait=0`, responde 503 al momento cuando el ultimo chequeo del
+cloud vio el timbre dormido, asi que una automatizacion no se queda colgada.
+`open_cooldown` evita que una doble pulsacion mande la orden dos veces.
 
 ### Video a traves del add-on
 

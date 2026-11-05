@@ -225,25 +225,35 @@ Settings -> Add-ons -> Add-on store -> Repositories
 install "Wibox Doorbell"
 ```
 
-Options: account, password, client id, device id, opening pin, API token,
-p2pconnect attempts, awake poll and video wait. The add-on forces the remote
-chain, so no LAN address is configured.
+Options, all of them adjustable from the add-on page: account, password,
+client id, device id, opening pin and API token; `attempts`, `awake_poll`,
+`video_wait`, `video_max`, `play_resends`, `cloud_check`, `open_cooldown` and
+`video_retry` for the timings. The add-on forces the remote chain, so no LAN
+address is configured.
 
 From Home Assistant:
 
 ```yaml
 rest_command:
-  wibox_open:
-    url: "http://homeassistant.local:8087/open"
+  wibox_abrir:
+    url: "http://homeassistant.local:8087/open?device=<device_id>"
     method: GET
     headers:
       Authorization: "Bearer <api_token>"
-    timeout: 120
+    timeout: 300
+  wibox_abrir_ya:
+    url: "http://homeassistant.local:8087/open?device=<device_id>&wait=0"
+    method: GET
+    headers:
+      Authorization: "Bearer <api_token>"
+    timeout: 30
 ```
 
-The timeout has to be generous: if the doorbell is asleep the daemon keeps
-retrying until it gets a peer, and only then opens. `WIBOX_REMOTE_ATTEMPTS` and
-the `attempts` option bound that wait.
+The first command waits: if the doorbell is asleep the daemon keeps retrying
+until it gets a peer and only then opens, so the timeout is generous and
+`attempts` bounds that wait. The second one answers straight away with 503 when
+the last cloud check saw the bell offline, which is what an automation wants.
+`open_cooldown` keeps a double press from opening twice.
 
 ### Video through the add-on
 
