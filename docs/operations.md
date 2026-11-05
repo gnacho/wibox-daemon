@@ -98,7 +98,17 @@ Set three variables, or the matching add-on options, to turn it on:
 | `WIBOX_HA_STREAM` | RTSP URL the entry should point at, for example `rtsp://192.168.1.244:8556/wibox` |
 
 With any of them empty the feature is off and nothing changes. When all three
-are set, the daemon checks `/status` once a minute and, the first time
-`video_keyframes` goes above zero, creates the entry if it does not exist yet.
-The still image points at the daemon's own `/health`, so the card has something
-to show even when the doorbell sleeps again.
+are set, the daemon checks `/status` once a minute and creates the entry if it
+does not exist yet. The still image points at the daemon's own `/snapshot.jpg`,
+so the card has something to show even when the doorbell sleeps.
+
+There are two ways to create the entry, and the daemon tries both:
+
+1. **With `stream_source`.** It works once the stream delivers media, because
+   the flow validates by opening the RTSP URL.
+2. **Without `stream_source`.** The flow cannot validate, so instead of failing
+   it asks for confirmation (`step_id: user_confirm`, field `confirmed_ok`).
+   Answering `{"confirmed_ok": true}` creates the entry anyway, backed by the
+   still image. This is what works while the doorbell sends no keyframe.
+
+The `advanced` block is mandatory in both cases, even without a stream.

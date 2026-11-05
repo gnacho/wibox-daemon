@@ -222,8 +222,13 @@ including the mandatory `advanced` block.
 The daemon creates the entry by itself when it has `WIBOX_HA_URL`,
 `WIBOX_HA_TOKEN` and `WIBOX_HA_STREAM` (in the add-on, the `ha_url`, `ha_token`
 and `ha_stream` options). It checks `/status` every minute and creates the
-generic camera the first time `video_keyframes` moves above zero, so the entry
-appears the moment the bell sends a picture, without anything else running.
+entry if it is missing, without anything else running.
+
+Two paths, and it tries both: with `stream_source` once the stream delivers
+media, and without it, where the flow cannot validate and instead asks for
+confirmation (`confirmed_ok`), which creates the entry backed by the still
+image. The second path is what works while the doorbell sends no keyframe, so
+the camera is there from the start and only the picture waits.
 
 `deploy/create-camera-when-ready.sh` is still there as a fallback, and mostly
 for its RTSP pull: while it waits it keeps a short `ffmpeg` pull alive (unless

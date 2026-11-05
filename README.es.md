@@ -219,9 +219,14 @@ lleva un keyframe. `deploy/camera-creation.md` tiene las llamadas exactas,
 incluido el bloque `advanced` obligatorio.
 El daemon crea la entrada por si mismo cuando tiene `WIBOX_HA_URL`,
 `WIBOX_HA_TOKEN` y `WIBOX_HA_STREAM` (en el add-on, las opciones `ha_url`,
-`ha_token` y `ha_stream`). Mira `/status` cada minuto y crea la camara generica
-la primera vez que `video_keyframes` pasa de cero, asi que la entrada aparece
-en cuanto el timbre manda imagen, sin nada mas corriendo.
+`ha_token` y `ha_stream`). Mira `/status` cada minuto y crea la entrada si
+falta, sin nada mas corriendo.
+
+Hay dos caminos y prueba los dos: con `stream_source` cuando el stream ya
+entrega media, y sin el, donde el flujo no puede validar y en vez de fallar
+pide confirmacion (`confirmed_ok`), que crea la entrada apoyada en la imagen
+fija. El segundo es el que funciona mientras el timbre no manda keyframe, asi
+que la camara esta desde el principio y solo la imagen espera.
 `deploy/create-camera-when-ready.sh` sigue como respaldo y, sobre todo, por su
 tirada RTSP: mientras espera mantiene un `ffmpeg` corto enganchado (salvo
 `PULL=0`), porque sin consumidor go2rtc no arranca el productor y el timbre no
