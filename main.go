@@ -557,6 +557,11 @@ func main() {
 		// si el timbre se duerme a mitad de sesion el proceso muere y el
 		// espectador se queda sin imagen. El bucle reintenta con credenciales
 		// frescas hasta que lo paren.
+		// El backoff base del bucle de video es configurable: con un timbre
+		// que duerme horas, un valor alto ahorra tuneles y logins.
+		if secs, aerr := strconv.Atoi(os.Getenv("WIBOX_VIDEO_RETRY")); aerr == nil && secs > 0 {
+			videoRetryDelay = time.Duration(secs) * time.Second
+		}
 		sigs := make(chan os.Signal, 1)
 		signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 		stop := make(chan struct{})

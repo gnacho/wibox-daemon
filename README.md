@@ -81,6 +81,7 @@ Everything through environment variables (or a systemd `EnvironmentFile`):
 | `WIBOX_VIDEO_MAX` | Hard cap on one video session, in seconds (default `900`, `0` disables it) |
 | `WIBOX_VIDEO_LOCK` | Lock file that keeps a second video process off the doorbell (default `/tmp/wibox-video.lock`) |
 | `WIBOX_OPEN_COOLDOWN` | Seconds to ignore a second opening after a successful one (default `3`, `0` disables it) |
+| `WIBOX_VIDEO_RETRY` | Base wait, in seconds, between video reconnects before the backoff doubles (default `5`) |
 | `WIBOX_DEBUG` | Any value enables HTTP and MQTT traces |
 
 A configuration file can also be passed with `-config <file>`. That is how
