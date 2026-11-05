@@ -73,6 +73,18 @@ caller cannot afford that, add `&wait=0`: the daemon answers `503` at once when
 the last cloud check saw the bell offline. A second opening within
 `WIBOX_OPEN_COOLDOWN` seconds receives `429` with `retry_after_s`.
 
+## Watching right after opening
+
+The bell accepts one session at a time, and an opening keeps it busy for a
+while. A video process started a second later therefore waits at `p2pconnect`
+and never gets media, which looks like a broken camera.
+
+The daemon writes the time of every successful opening to
+`<video.lock>.lastopen` and the video process waits out the rest of the window
+before dialling. `WIBOX_OPEN_SETTLE` (add-on option `open_settle`) sets the
+window: `75` seconds by default, `0` restores the old behaviour. Failed openings
+are not recorded, so a `503` does not delay the next view.
+
 ## Known limits
 
 - The bell sends no PPS and, in every capture so far, no IDR either. The

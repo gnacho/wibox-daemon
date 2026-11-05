@@ -89,6 +89,7 @@ Everything through environment variables (or a systemd `EnvironmentFile`):
 | `WIBOX_VIDEO_MAX` | Hard cap on one video session, in seconds (default `900`, `0` disables it) |
 | `WIBOX_VIDEO_LOCK` | Lock file that keeps a second video process off the doorbell (default `/tmp/wibox-video.lock`) |
 | `WIBOX_OPEN_COOLDOWN` | Seconds to ignore a second opening after a successful one (default `3`, `0` disables it) |
+| `WIBOX_OPEN_SETTLE` | Seconds the video waits after a successful opening, because the bell keeps the single session busy that long (default `75`, `0` disables it) |
 | `WIBOX_VIDEO_RETRY` | Base wait, in seconds, between video reconnects before the backoff doubles (default `5`) |
 | `WIBOX_VIDEO_RETRY_MAX` | Ceiling of the video reconnect backoff, in seconds (default `60`) |
 | `WIBOX_VIDEO_START_TIMEOUT` | Seconds go2rtc waits for the video producer before killing it (default `300`) |
