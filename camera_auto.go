@@ -61,18 +61,46 @@ func (c *cameraAuto) call(method, path string, body any) ([]byte, int, error) {
 }
 
 // stillURL compone http://<host del stream>:<puerto de la api>/health.
+func (c *cameraAuto) host() string {
+	if u, err := url.Parse(c.stream); err == nil && u.Hostname() != "" {
+		return u.Hostname()
+	}
+	return ""
+}
+
 func (c *cameraAuto) stillURL() string {
 	host := c.stream
-	if u, err := url.Parse(c.stream); err == nil && u.Hostname() != "" {
-		host = u.Hostname()
+	if h := c.host(); h != "" {
+		host = h
 	}
 	return fmt.Sprintf("http://%s:%d/snapshot.jpg", host, c.apiPort)
 }
 
-// exists mira si ya hay una camara con "wibox" en el nombre: la integracion no
-// deja leer las opciones de una entrada, asi que no hay otra forma barata.
+// exists mira si ya hay una entrada de camara generica nuestra. Se mira la
+// lista de config entries (dominio generic con el host del stream en el
+// titulo, que es como la nombra Home Assistant) y, por si acaso, las camaras
+// que lleven "wibox" en el nombre.
 func (c *cameraAuto) exists() bool {
-	raw, code, err := c.call("GET", "/api/states", nil)
+	raw, code, err := c.call("GET", "/api/config/config_entries/entry", nil)
+	if err == nil && code == 200 {
+		var entries []struct {
+			Domain string `json:"domain"`
+			Title  string `json:"title"`
+		}
+		if json.Unmarshal(raw, &entries) == nil {
+			for _, e := range entries {
+				if e.Domain != "generic" {
+					continue
+				}
+				title := strings.ToLower(e.Title)
+				if strings.Contains(title, "wibox") || (c.host() != "" && strings.Contains(title, strings.ReplaceAll(c.host(), ".", "_"))) {
+					return true
+				}
+			}
+		}
+	}
+
+	raw, code, err = c.call("GET", "/api/states", nil)
 	if err != nil || code != 200 {
 		return false
 	}
@@ -95,7 +123,20 @@ func (c *cameraAuto) exists() bool {
 	return false
 }
 
+// create intenta el alta con stream y, si Home Assistant no consigue validarlo,
+// la repite apoyada solo en la imagen fija: en ese caso el flujo pide una
+// confirmacion (paso user_confirm) y crea la entrada igual.
 func (c *cameraAuto) create() error {
+	if err := c.createAttempt(true); err != nil {
+		log.Printf("camara: el alta con stream no valido (%v), se intenta solo con la imagen fija", err)
+		return c.createAttempt(false)
+	}
+	return nil
+}
+
+// createAttempt recorre el config flow generico. advanced es obligatorio
+// siempre, aunque no se mande stream_source.
+func (c *cameraAuto) createAttempt(withStream bool) error {
 	raw, code, err := c.call("POST", "/api/config/config_entries/flow", map[string]string{"handler": "generic"})
 	if err != nil {
 		return err
@@ -106,26 +147,53 @@ func (c *cameraAuto) create() error {
 	if err := json.Unmarshal(raw, &flow); err != nil || flow.FlowID == "" {
 		return fmt.Errorf("flujo generic sin flow_id (http %d)", code)
 	}
-	// La imagen fija la sirve el propio daemon en el mismo host que el stream:
-	// /health responde siempre, incluso con el timbre dormido.
-	still := c.stillURL()
+
 	body := map[string]any{
-		"stream_source":   c.stream,
-		"still_image_url": still,
+		"still_image_url": c.stillURL(),
 		"advanced": map[string]any{
 			"framerate":      2.0,
 			"verify_ssl":     false,
 			"rtsp_transport": "tcp",
 		},
 	}
-	raw, code, err = c.call("POST", "/api/config/config_entries/flow/"+flow.FlowID, body)
-	if err != nil {
-		return err
+	if withStream {
+		body["stream_source"] = c.stream
 	}
-	if !bytes.Contains(raw, []byte(`"type":"create_entry"`)) && !bytes.Contains(raw, []byte(`"type": "create_entry"`)) {
-		return fmt.Errorf("el alta no confirmo create_entry (http %d): %s", code, truncate(string(raw), 200))
+
+	for step := 0; step < 3; step++ {
+		raw, code, err = c.call("POST", "/api/config/config_entries/flow/"+flow.FlowID, body)
+		if err != nil {
+			return err
+		}
+		if bytes.Contains(raw, []byte(`"type":"create_entry"`)) || bytes.Contains(raw, []byte(`"type": "create_entry"`)) {
+			return nil
+		}
+		var resp struct {
+			Type   string            `json:"type"`
+			Step   string            `json:"step_id"`
+			Errors map[string]string `json:"errors"`
+		}
+		if jerr := json.Unmarshal(raw, &resp); jerr != nil {
+			return fmt.Errorf("respuesta del flujo ilegible (http %d): %s", code, truncate(string(raw), 200))
+		}
+		switch resp.Type {
+		case "form":
+			if resp.Step == "user_confirm" {
+				// Confirmacion de "no hay stream, se crea con la imagen fija".
+				body = map[string]any{"confirmed_ok": true}
+				continue
+			}
+			if len(resp.Errors) > 0 {
+				return fmt.Errorf("el flujo devolvio errores: %v", resp.Errors)
+			}
+			return fmt.Errorf("formulario inesperado en el paso %q", resp.Step)
+		case "abort":
+			return fmt.Errorf("el flujo aborto: %s", truncate(string(raw), 200))
+		default:
+			return fmt.Errorf("respuesta inesperada (http %d): %s", code, truncate(string(raw), 200))
+		}
 	}
-	return nil
+	return fmt.Errorf("el flujo de la camara no termino en tres pasos")
 }
 
 // ensure crea la entrada si hace falta. Es idempotente: si ya existe, sale sin
