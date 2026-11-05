@@ -23,6 +23,8 @@ WIBOX_API_TOKEN="$(value api_token)"
 WIBOX_REMOTE_ATTEMPTS="$(value attempts)"
 WIBOX_AWAKE_POLL="$(value awake_poll)"
 WIBOX_VIDEO_WAIT="$(value video_wait)"
+WIBOX_VIDEO_MAX="$(value video_max)"
+WIBOX_PLAY_RESENDS="$(value play_resends)"
 
 for required in WIBOX_ACCOUNT WIBOX_PASSWORD WIBOX_DEVICE_ID WIBOX_UNLOCK_PASSWORD; do
     eval "current=\$$required"
@@ -41,6 +43,7 @@ WIBOX_MPEGTS=1
 export WIBOX_ACCOUNT WIBOX_PASSWORD WIBOX_CLIENT_ID WIBOX_DEVICE_ID
 export WIBOX_UNLOCK_PASSWORD WIBOX_API_TOKEN WIBOX_REMOTE WIBOX_REMOTE_ONLY
 export WIBOX_API_PORT WIBOX_REMOTE_ATTEMPTS WIBOX_AWAKE_POLL WIBOX_VIDEO_WAIT
+export WIBOX_VIDEO_MAX WIBOX_PLAY_RESENDS
 export WIBOX_MPEGTS
 
 # go2rtc no reenvia el stderr de sus hijos, asi que el log del proceso de video
