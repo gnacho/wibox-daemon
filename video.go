@@ -231,6 +231,21 @@ func runVideo(cfg config, session string, key []byte, password string, out io.Wr
 		log.Printf("video: salida MPEG-TS con pistas H264 y G711A")
 	}
 	waitingIDR := true
+	// Los parametros se escriben con el primer frame, no con el primer keyframe:
+	// el MPEG-TS anuncia asi una pista H.264 valida desde el principio y la
+	// validacion del config flow de Home Assistant no depende de un IDR.
+	paramsWritten := false
+	writeParams := func(ptsMS int64) error {
+		if paramsWritten {
+			return nil
+		}
+		paramsWritten = true
+		if ts != nil {
+			return ts.WriteVideo(ptsMS, params)
+		}
+		_, err := out.Write(params)
+		return err
+	}
 	nalCensus := map[int]int{}
 	skipped := 0
 	// El timbre emite un IDR al arrancar el stream, asi que enganchados a mitad
@@ -337,6 +352,9 @@ func runVideo(cfg config, session string, key []byte, password string, out io.Wr
 				}
 			})
 			for _, f := range frames {
+				if perr := writeParams(f.TimestampMS); perr != nil {
+					return fmt.Errorf("escribiendo SPS/PPS: %w", perr)
+				}
 				// El audio no depende de un keyframe: se emite desde el
 				// principio, asi se oye al visitante aunque el IDR tarde.
 				if !f.Video {
@@ -394,14 +412,7 @@ func runVideo(cfg config, session string, key []byte, password string, out io.Wr
 					}
 					if waitingIDR {
 						waitingIDR = false
-						if ts != nil {
-							if err := ts.WriteVideo(f.TimestampMS, params); err != nil {
-								return fmt.Errorf("escribiendo SPS/PPS: %w", err)
-							}
-						} else if _, err := out.Write(params); err != nil {
-							return fmt.Errorf("escribiendo SPS/PPS: %w", err)
-						}
-						log.Printf("video: primer keyframe tras %d frames saltados, SPS/PPS inyectados", skipped)
+						log.Printf("video: primer keyframe tras %d frames saltados", skipped)
 					}
 					if ts != nil {
 						if err := ts.WriteVideo(f.TimestampMS, f.Bitstream); err != nil {
