@@ -165,6 +165,18 @@ func (d *daemon) recordCloud(ok bool, err error) {
 	}
 }
 
+// devicesCached devuelve una copia de la ultima lista si todavia esta fresca.
+func (d *daemon) devicesCached(maxAge time.Duration) ([]deviceInfo, bool) {
+	d.statusMu.Lock()
+	defer d.statusMu.Unlock()
+	if d.devicesAt.IsZero() || time.Since(d.devicesAt) > maxAge {
+		return nil, false
+	}
+	out := make([]deviceInfo, len(d.devicesCache))
+	copy(out, d.devicesCache)
+	return out, true
+}
+
 func (d *daemon) cloudState() (bool, string, time.Time) {
 	d.statusMu.Lock()
 	defer d.statusMu.Unlock()
@@ -262,7 +274,15 @@ type deviceInfo struct {
 	Online bool   `json:"online"`
 }
 
+// deviceCacheTTL es cuanto vale la lista que trae el vigilante de cloud.
+// Home Assistant sondea /devices cada dos minutos y no tiene sentido pagar un
+// login al fabricante por cada sondeo.
+const deviceCacheTTL = 90 * time.Second
+
 func (d *daemon) devices() ([]deviceInfo, error) {
+	if list, ok := d.devicesCached(deviceCacheTTL); ok {
+		return list, nil
+	}
 	if err := d.login(); err != nil {
 		return nil, err
 	}
