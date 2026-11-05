@@ -605,8 +605,14 @@ func main() {
 				limit = n
 			}
 		}
-		if err := decodeDump(*decodePath, key, limit); err != nil {
-			log.Fatalf("decode: %v", err)
+		for _, path := range strings.Split(*decodePath, ",") {
+			path = strings.TrimSpace(path)
+			if path == "" {
+				continue
+			}
+			if err := decodeAnyDump(path, key, limit); err != nil {
+				log.Fatalf("decode: %v", err)
+			}
 		}
 		return
 	}
