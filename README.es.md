@@ -130,6 +130,8 @@ GET  /status                      Authorization: Bearer <token>
 
 `/status` informa de la version, el tiempo encendido, si hay una sesion de
 video viva y el ultimo intento de apertura (via, codigo, error y hora).
+Mientras hay sesion publica ademas `video_frames` y `video_keyframes`, que es
+como se distingue un stream que solo lleva audio de uno que ya tiene imagen.
 
 Ejemplos:
 

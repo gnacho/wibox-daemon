@@ -133,7 +133,9 @@ GET  /status                      Authorization: Bearer <token>
 ```
 
 `/status` reports the version, uptime, whether a video session is alive and the
-last opening attempt (route, code, error, time).
+last opening attempt (route, code, error, time). While a session is running it
+also carries `video_frames` and `video_keyframes`, which is how you tell a
+stream that only has audio from one that already has a picture.
 
 Examples:
 
