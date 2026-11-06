@@ -131,3 +131,15 @@ func TestDemuxKeepsTruncatedTail(t *testing.T) {
 		t.Fatal("bitstream vacio")
 	}
 }
+
+func TestStripParamSetsKeepsOnlyTheSlices(t *testing.T) {
+	bs := []byte{0, 0, 0, 1, 0x67, 0x4d, 0x40, 0x0d, 0, 0, 0, 1, 0x68, 0xee, 0x3c, 0x80, 0, 0, 0, 1, 0x65, 0x88, 0x84}
+	got := stripParamSets(bs)
+	want := []byte{0, 0, 0, 1, 0x65, 0x88, 0x84}
+	if !bytes.Equal(got, want) {
+		t.Fatalf("stripParamSets = % x, esperaba % x", got, want)
+	}
+	if _, ok := parseCPacketHeader(append([]byte{0, 0, 1, 0xE1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 80, 96, 1, 32, 1}, bs...), 0); !ok {
+		t.Fatal("el cpacket de la prueba no parsea")
+	}
+}
