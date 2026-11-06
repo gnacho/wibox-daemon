@@ -104,8 +104,10 @@ func TestTSMuxerPTSIsMonotonic(t *testing.T) {
 			t.Fatalf("video: %v", err)
 		}
 	}
-	if m.lastPTS[tsPIDVideo] != uint32(1100*90)&0x1FFFFFFF {
-		t.Fatalf("PTS final %d", m.lastPTS[tsPIDVideo])
+	// Las marcas se refieren al primer frame (1000), asi que 1100 son 100 ms:
+	// 9000 ticks de 90 kHz. La que retrocede se queda en un tick por delante.
+	if m.lastPTS[tsPIDVideo] != uint32(9000) {
+		t.Fatalf("PTS final %d, se esperaban 9000", m.lastPTS[tsPIDVideo])
 	}
 	checkTSPackets(t, buf.Bytes())
 }
@@ -214,13 +216,38 @@ func TestTSMuxerNeverRepeatsAPTS(t *testing.T) {
 			t.Fatalf("WriteVideo: %v", err)
 		}
 	}
-	first := m.lastPTS[tsPIDVideo]
-	if first == 0 {
-		t.Fatal("sin marca de tiempo")
+	// El primer frame fija el origen en cero y los otros tres con la misma
+	// marca avanzan un tick cada uno: el ultimo queda en 3.
+	if got := m.lastPTS[tsPIDVideo]; got != 3 {
+		t.Fatalf("pts final = %d, se esperaba 3", got)
 	}
-	// Cuatro frames con la misma marca deben quedar en cuatro valores
-	// distintos y crecientes; el ultimo es el primero mas tres ticks.
-	if first != uint32(1000*90)+3 {
-		t.Fatalf("pts final = %d, se esperaba %d", first, 1000*90+3)
+}
+
+// El timbre marca con el reloj del aparato (epoch en milisegundos). Pasarlo
+// tal cual a 90 kHz desborda el uint32 y deja marcas sin sentido: el audio se
+// caia en el consumidor. Cada pista tiene que arrancar en cero.
+func TestTSMuxerNormalisesEpochTimestamps(t *testing.T) {
+	var buf bytes.Buffer
+	m := newTSMuxer(&buf)
+
+	if err := m.WriteVideo(1793924378123, []byte{0x00, 0x00, 0x00, 0x01, 0x41}); err != nil {
+		t.Fatalf("video: %v", err)
+	}
+	if got := m.lastPTS[tsPIDVideo]; got != 0 {
+		t.Fatalf("primer PTS %d, se esperaba 0", got)
+	}
+	if err := m.WriteVideo(1793924378143, []byte{0x00, 0x00, 0x00, 0x01, 0x41}); err != nil {
+		t.Fatalf("video: %v", err)
+	}
+	if got := m.lastPTS[tsPIDVideo]; got != 20*90 {
+		t.Fatalf("segundo PTS %d, se esperaban %d", got, 20*90)
+	}
+
+	// El audio lleva su propio origen y no se contamina del video.
+	if err := m.WriteAudio(1793924379000, []byte{0xd5}); err != nil {
+		t.Fatalf("audio: %v", err)
+	}
+	if got := m.lastPTS[tsPIDAudio]; got != 0 {
+		t.Fatalf("primer PTS de audio %d, se esperaba 0", got)
 	}
 }

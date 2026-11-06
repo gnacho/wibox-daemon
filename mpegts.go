@@ -27,6 +27,7 @@ type tsMuxer struct {
 	w        io.Writer
 	cc       map[uint16]byte
 	lastPTS  map[uint16]uint32
+	basePTS  map[uint16]int64
 	written  bool
 	patPMT   []byte
 	videoPID uint16
@@ -38,6 +39,7 @@ func newTSMuxer(w io.Writer) *tsMuxer {
 		w:        w,
 		cc:       map[uint16]byte{},
 		lastPTS:  map[uint16]uint32{},
+		basePTS:  map[uint16]int64{},
 		videoPID: tsPIDVideo,
 		audioPID: tsPIDAudio,
 	}
@@ -234,10 +236,23 @@ func (m *tsMuxer) writeHeaderIfNeeded() error {
 // ptsFor mantiene el PTS monotono por PID: un retroceso de la marca de tiempo
 // del demuxer hace que los reproductores descarten el frame.
 func (m *tsMuxer) ptsFor(pid uint16, ptsMS int64) uint32 {
-	pts := uint32(ptsMS) * 90
 	if ptsMS < 0 {
-		pts = 0
+		ptsMS = 0
 	}
+	// El timbre marca sus frames con el reloj del aparato (epoch en
+	// milisegundos), y pasarlo tal cual a 90 kHz desborda el uint32 y deja
+	// marcas que no significan nada: los demuxers toleran el video mal
+	// marcado, pero el audio se cae. Cada pista se referencia a su primer
+	// frame para que empiece en cero y crezca.
+	if base, ok := m.basePTS[pid]; !ok {
+		m.basePTS[pid] = ptsMS
+		ptsMS = 0
+	} else if rel := ptsMS - base; rel > 0 {
+		ptsMS = rel
+	} else {
+		ptsMS = 0
+	}
+	pts := uint32(ptsMS) * 90
 	if last, ok := m.lastPTS[pid]; ok && int32(pts-last) <= 0 {
 		// Repetir la marca no vale: el demuxer lo rechaza con "non
 		// monotonically increasing dts". Se avanza un tick de 90 kHz.
