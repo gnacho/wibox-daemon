@@ -79,6 +79,7 @@ func (f writerFunc) Write(p []byte) (int, error) { return f(p) }
 // go2rtc no publica el stream hasta que su demuxer ve un frame de video, asi
 // que el relleno tiene que llevar tambien un IDR, no solo audio.
 func TestAudioTrickleWritesVideoFrames(t *testing.T) {
+	t.Setenv("WIBOX_TRICKLE_VIDEO", "1")
 	var out bytes.Buffer
 	ts := newTSMuxer(&out)
 

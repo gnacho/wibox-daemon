@@ -42,6 +42,7 @@ func trickleInterval() time.Duration {
 // que pararla antes de empezar a escribir video, porque el muxer no esta
 // preparado para dos escritores a la vez.
 func startAudioTrickle(ts *tsMuxer, every time.Duration) (stop func()) {
+	trickleVideo := envFlag("WIBOX_TRICKLE_VIDEO")
 	if ts == nil || every <= 0 {
 		return func() {}
 	}
@@ -65,9 +66,10 @@ func startAudioTrickle(ts *tsMuxer, every time.Duration) (stop func()) {
 				if err := ts.WriteAudio(ptsMS, alawSilence); err != nil {
 					return
 				}
-				// Un IDR cada 100 ms basta para que el demuxer tenga pista de
-				// video, y no llena el tubo: son 99 bytes por frame.
-				if ticks%5 == 0 {
+				// El IDR de relleno se manda solo si se pide: sus parametros
+				// no son los del timbre y go2rtc se queda con ellos como si
+				// fueran del stream, con lo que el video real no decodifica.
+				if trickleVideo && ticks%5 == 0 {
 					if err := ts.WriteVideo(ptsMS, fakeFrame); err != nil {
 						return
 					}
