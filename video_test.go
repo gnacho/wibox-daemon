@@ -111,3 +111,23 @@ func TestConsumeQuiiPacketsRecoversFromStalledHeader(t *testing.T) {
 	}
 	_ = rest
 }
+
+// El SPS que anunciamos no puede empezar por 0x47: go2rtc lo confunde con un
+// AUD de H.265 (b&0x7e == 70) y lo tira, con lo que su SDP sale sin SPS y el
+// cliente no puede decodificar nada.
+func TestAnnexBParamsSurviveTheGo2rtcAudCheck(t *testing.T) {
+	params := annexBParams()
+	if len(params) < 5 || params[0] != 0 || params[1] != 0 || params[2] != 0 || params[3] != 1 {
+		t.Fatalf("sin start code: % x", params[:min(6, len(params))])
+	}
+	header := params[4]
+	if header&0x1F != 7 {
+		t.Fatalf("el primer NAL no es un SPS: 0x%02x", header)
+	}
+	if header&0x7E == 70 {
+		t.Fatalf("cabecera 0x%02x tomada por AUD de H.265 en go2rtc", header)
+	}
+	if header>>5&0x3 == 0 {
+		t.Fatalf("el SPS no puede tener nal_ref_idc = 0: 0x%02x", header)
+	}
+}

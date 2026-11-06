@@ -4,7 +4,7 @@ FROM golang:1.27-alpine AS build
 # The Supervisor builds an add-on with its own folder as the build context, so
 # the Go sources cannot be copied from the repository root. They come from the
 # tag that matches the add-on version instead, which also pins what gets built.
-ARG WIBOX_VERSION=0.10.48
+ARG WIBOX_VERSION=0.10.50
 ADD https://github.com/gnacho/wibox-daemon/archive/refs/tags/v${WIBOX_VERSION}.tar.gz /tmp/src.tar.gz
 RUN mkdir -p /src && tar -xzf /tmp/src.tar.gz -C /src --strip-components=1
 WORKDIR /src
@@ -14,11 +14,12 @@ FROM $BUILD_FROM
 
 # go2rtc turns the daemon's H264 stdout into RTSP/WebRTC for Home Assistant.
 # It has to live in the same container because its exec source can only spawn
-# a binary that exists inside it.
+# a binary that exists inside it. ffmpeg is there for go2rtc's frame.jpeg, the
+# still image Home Assistant asks for when it is not streaming.
 ARG BUILD_ARCH=amd64
 ARG GO2RTC_VERSION=1.9.15
 
-RUN apk add --no-cache ca-certificates jq curl \
+RUN apk add --no-cache ca-certificates jq curl ffmpeg \
  && case "${BUILD_ARCH}" in aarch64) arch=arm64 ;; *) arch=amd64 ;; esac \
  && curl -fsSL -o /usr/bin/go2rtc \
       "https://github.com/AlexxIT/go2rtc/releases/download/v${GO2RTC_VERSION}/go2rtc_linux_${arch}" \
