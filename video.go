@@ -111,12 +111,6 @@ func runVideo(cfg config, session string, key []byte, password string, out io.Wr
 	if lockPath == "" {
 		lockPath = defaultVideoLock
 	}
-	release, lerr := acquireVideoLock(lockPath)
-	if lerr != nil {
-		return lerr
-	}
-	defer release()
-
 	// Igual que la app: sin PPS no hay decodificador, y antes del primer IDR los
 	// slices no sirven para nada. Se espera al keyframe y entonces se escribe
 	// SPS+PPS+IDR de una tacada.
@@ -175,6 +169,16 @@ func runVideo(cfg config, session string, key []byte, password string, out io.Wr
 	// un goteo de silencio y se corta justo antes de escribir frames reales.
 	stopTrickle := startAudioTrickle(ts, trickleInterval())
 	defer stopTrickle()
+
+	// El cerrojo se pide con el relleno ya en marcha: si el proceso anterior
+	// todavia no ha soltado su sesion, el espectador nuevo sigue recibiendo
+	// pistas en vez de quedarse mudo, y engancha el video real en cuanto la
+	// otra sesion termina.
+	release, lerr := acquireVideoLockWait(lockPath, lockWait())
+	if lerr != nil {
+		return lerr
+	}
+	defer release()
 
 	// Si la API acaba de abrir, el timbre todavia tiene esa sesion y no deja
 	// montar otra: esperar aqui es mas barato que gastar el presupuesto remoto

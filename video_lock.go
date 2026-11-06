@@ -2,10 +2,12 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 )
 
 // El timbre solo admite una sesion QUII a la vez. Un segundo proceso de video
@@ -69,4 +71,33 @@ func videoLockFree(path string) bool {
 	}
 	release()
 	return true
+}
+
+// acquireVideoLockWait espera a que se libere el cerrojo en vez de rendirse al
+// primer intento. Mientras espera, quien llama sigue alimentando el tubo, asi
+// que un espectador nuevo ve la pista publicada y engancha la sesion real en
+// cuanto la anterior acaba.
+func acquireVideoLockWait(path string, wait time.Duration) (func(), error) {
+	deadline := time.Now().Add(wait)
+	for {
+		release, err := acquireVideoLock(path)
+		if err == nil {
+			return release, nil
+		}
+		if wait <= 0 || !time.Now().Before(deadline) {
+			return nil, err
+		}
+		log.Printf("video: %v; espero a que termine la otra sesion", err)
+		time.Sleep(500 * time.Millisecond)
+	}
+}
+
+// lockWait lee WIBOX_LOCK_WAIT en segundos (defecto 300). Cero o negativo hace
+// que un cerrojo ocupado falle de inmediato, como antes.
+func lockWait() time.Duration {
+	secs, _ := strconv.Atoi(env("WIBOX_LOCK_WAIT", "300"))
+	if secs <= 0 {
+		return 0
+	}
+	return time.Duration(secs) * time.Second
 }
