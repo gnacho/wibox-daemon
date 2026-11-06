@@ -256,7 +256,12 @@ func (d *daemon) checkCloud() {
 		d.recordCloud(false, err)
 		return
 	}
-	resp, err := d.auth.DeviceList()
+	var resp *Response
+	err := d.cloudCall(func() error {
+		var e error
+		resp, e = d.auth.DeviceList()
+		return e
+	})
 	if err != nil {
 		d.recordCloud(false, err)
 		return
@@ -305,6 +310,45 @@ func (d *daemon) login() error {
 	return nil
 }
 
+// staleSession dice si un error del cloud tiene pinta de conexion muerta. Las
+// duplex del proveedor se quedan colgadas sin avisar, y con la sesion vieja
+// cada peticion espera hasta agotar su plazo para siempre.
+func staleSession(err error) bool {
+	if err == nil {
+		return false
+	}
+	s := strings.ToLower(err.Error())
+	return strings.Contains(s, "timeout") || strings.Contains(s, "eof") ||
+		strings.Contains(s, "session") || strings.Contains(s, "expired") ||
+		strings.Contains(s, "closed")
+}
+
+// relogin tira la sesion y vuelve a entrar.
+func (d *daemon) relogin() error {
+	if d.auth == nil {
+		return fmt.Errorf("no hay cliente del cloud")
+	}
+	d.mu.Lock()
+	d.auth.session = ""
+	d.mu.Unlock()
+	return d.login()
+}
+
+// cloudCall ejecuta una peticion y, si falla como si la sesion estuviera
+// muerta, la renueva y la repite una sola vez.
+func (d *daemon) cloudCall(fn func() error) error {
+	err := fn()
+	if err == nil || !staleSession(err) {
+		return err
+	}
+	log.Printf("cloud: %v; renuevo la sesion", err)
+	if rerr := d.relogin(); rerr != nil {
+		log.Printf("cloud: no se pudo renovar la sesion: %v", rerr)
+		return err
+	}
+	return fn()
+}
+
 type deviceInfo struct {
 	ID     string `json:"id"`
 	Name   string `json:"name"`
@@ -324,8 +368,12 @@ func (d *daemon) devices() ([]deviceInfo, error) {
 	if err := d.login(); err != nil {
 		return nil, err
 	}
-	resp, err := d.auth.DeviceList()
-	if err != nil {
+	var resp *Response
+	if err := d.cloudCall(func() error {
+		var e error
+		resp, e = d.auth.DeviceList()
+		return e
+	}); err != nil {
 		return nil, err
 	}
 	return deviceInfosFrom(resp), nil
@@ -366,8 +414,12 @@ func (d *daemon) openDoor(deviceID string) (int, string, error) {
 	if err := d.login(); err != nil {
 		return -1, "", err
 	}
-	token, err := d.auth.DeviceToken(deviceID)
-	if err != nil {
+	var token *DeviceToken
+	if err := d.cloudCall(func() error {
+		var e error
+		token, e = d.auth.DeviceToken(deviceID)
+		return e
+	}); err != nil {
 		return -1, "", err
 	}
 	key := []byte(token.DataEncodeKey)
