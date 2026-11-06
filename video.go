@@ -100,6 +100,25 @@ func shouldSkipFrame(waitingIDR, keyFrame, allFrames bool) bool {
 	return waitingIDR && !keyFrame && !allFrames
 }
 
+// writeAudioFrame manda un frame de audio al sitio que toque: al muxer cuando
+// la salida va en MPEG-TS, o al writer suelto cuando van por caminos separados.
+// Devuelve si escribio algo, para poder contarlo de verdad. Antes la condicion
+// exigia un audioOut y en MPEG-TS es nil, asi que el audio del timbre no se
+// muxaba nunca y la cuenta salia a cero.
+func writeAudioFrame(ts *tsMuxer, audioOut io.Writer, ptsMS int64, bitstream []byte) (bool, error) {
+	if len(bitstream) == 0 {
+		return false, nil
+	}
+	if ts != nil {
+		return true, ts.WriteAudio(ptsMS, bitstream)
+	}
+	if audioOut == nil {
+		return false, nil
+	}
+	_, err := audioOut.Write(bitstream)
+	return true, err
+}
+
 // runVideo abre la cadena remota, arranca el play y escribe el bitstream H264 en
 // Annex-B por el writer. Es lo que consume go2rtc desde Home Assistant con un
 // origen exec, asi que no hace falta montar un servidor RTSP aqui.
@@ -420,14 +439,11 @@ func runVideo(cfg config, session string, key []byte, password string, out io.Wr
 				// El audio no depende de un keyframe: se emite desde el
 				// principio, asi se oye al visitante aunque el IDR tarde.
 				if !f.Video {
-					if audioOut != nil && len(f.Bitstream) > 0 {
-						if ts != nil {
-							if aerr := ts.WriteAudio(f.TimestampMS, f.Bitstream); aerr != nil {
-								return fmt.Errorf("escribiendo audio: %w", aerr)
-							}
-						} else if _, aerr := audioOut.Write(f.Bitstream); aerr != nil {
-							return fmt.Errorf("escribiendo audio: %w", aerr)
-						}
+					wrote, aerr := writeAudioFrame(ts, audioOut, f.TimestampMS, f.Bitstream)
+					if aerr != nil {
+						return fmt.Errorf("escribiendo audio: %w", aerr)
+					}
+					if wrote {
 						audioFrames++
 					}
 					if !waitTimer.Stop() {
