@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/base64"
 	"log"
+	"os"
 	"strconv"
 	"sync"
 	"time"
@@ -42,7 +43,7 @@ func trickleInterval() time.Duration {
 // que pararla antes de empezar a escribir video, porque el muxer no esta
 // preparado para dos escritores a la vez.
 func startAudioTrickle(ts *tsMuxer, every time.Duration) (stop func()) {
-	trickleVideo := envFlag("WIBOX_TRICKLE_VIDEO")
+	trickleVideo := os.Getenv("WIBOX_TRICKLE_VIDEO") != "0"
 	if ts == nil || every <= 0 {
 		return func() {}
 	}
@@ -70,7 +71,10 @@ func startAudioTrickle(ts *tsMuxer, every time.Duration) (stop func()) {
 				// no son los del timbre y go2rtc se queda con ellos como si
 				// fueran del stream, con lo que el video real no decodifica.
 				if trickleVideo && ticks%5 == 0 {
-					if err := ts.WriteVideo(ptsMS, fakeFrame); err != nil {
+					// Solo los parametros: declaran la pista de video para que
+					// go2rtc responda el DESCRIBE sin meter en la cache un
+					// keyframe con parametros que no son los del timbre.
+					if err := ts.WriteVideo(ptsMS, annexBParams()); err != nil {
 						return
 					}
 				}

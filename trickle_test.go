@@ -87,9 +87,9 @@ func TestAudioTrickleWritesVideoFrames(t *testing.T) {
 	time.Sleep(30 * time.Millisecond)
 	stop()
 
-	// Los bytes del IDR viajan tal cual dentro del PES de video.
-	needle := fakeFrame[4:24]
+	// Los parametros viajan tal cual dentro del PES de video.
+	needle := annexBParams()[4:24]
 	if !bytes.Contains(out.Bytes(), needle) {
-		t.Fatal("el relleno no emitio ningun frame de video")
+		t.Fatal("el relleno no emitio la pista de video")
 	}
 }
