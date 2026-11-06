@@ -325,3 +325,17 @@ func TestAddOnExposesTheWarmWindow(t *testing.T) {
 		t.Fatal("config.yaml no declara el rango de warm_seconds")
 	}
 }
+
+func TestWarmFailureLoggingIsThrottled(t *testing.T) {
+	if !shouldLogWarmFailure(1) {
+		t.Fatal("el primer fallo tiene que avisarse")
+	}
+	for _, n := range []int{2, 3, 29, 31, 59} {
+		if shouldLogWarmFailure(n) {
+			t.Fatalf("el fallo %d no deberia inundar el log", n)
+		}
+	}
+	if !shouldLogWarmFailure(30) || !shouldLogWarmFailure(60) {
+		t.Fatal("cada minuto (treinta sondeos) toca recordarlo")
+	}
+}

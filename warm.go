@@ -94,6 +94,7 @@ func (w *warmWindow) run(stop <-chan struct{}) {
 	}
 
 	var keeper warmKeeper
+	var failures int
 	st := warmStep{}
 
 	drop := func(why string) {
@@ -132,8 +133,18 @@ func (w *warmWindow) run(stop <-chan struct{}) {
 
 		viewers, err := w.viewers()
 		if err != nil {
-			log.Printf("caliente: %v", err)
+			// Sin go2rtc (o con la API caida) el sondeo falla cada dos
+			// segundos: se avisa al principio, luego cada minuto, y se deja
+			// de repetir en cuanto vuelve a responder.
+			failures++
+			if shouldLogWarmFailure(failures) {
+				log.Printf("caliente: %v (fallo %d)", err, failures)
+			}
 			continue
+		}
+		if failures > 0 {
+			log.Printf("caliente: go2rtc vuelve a responder tras %d fallos", failures)
+			failures = 0
 		}
 		now := time.Now()
 		attach, detach := w.decide(&st, viewers, now)
@@ -223,4 +234,10 @@ func (k *ffmpegKeeper) stop() {
 			_ = k.cmd.Process.Kill()
 		}
 	}
+}
+
+// shouldLogWarmFailure limita los avisos de sondeo: el primero, y luego uno
+// cada minuto (treinta sondeos de dos segundos).
+func shouldLogWarmFailure(failures int) bool {
+	return failures == 1 || failures%30 == 0
 }
