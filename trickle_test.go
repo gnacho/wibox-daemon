@@ -75,3 +75,20 @@ func TestAudioTrickleSingleWriter(t *testing.T) {
 type writerFunc func([]byte) (int, error)
 
 func (f writerFunc) Write(p []byte) (int, error) { return f(p) }
+
+// go2rtc no publica el stream hasta que su demuxer ve un frame de video, asi
+// que el relleno tiene que llevar tambien un IDR, no solo audio.
+func TestAudioTrickleWritesVideoFrames(t *testing.T) {
+	var out bytes.Buffer
+	ts := newTSMuxer(&out)
+
+	stop := startAudioTrickle(ts, time.Millisecond)
+	time.Sleep(30 * time.Millisecond)
+	stop()
+
+	// Los bytes del IDR viajan tal cual dentro del PES de video.
+	needle := fakeFrame[4:24]
+	if !bytes.Contains(out.Bytes(), needle) {
+		t.Fatal("el relleno no emitio ningun frame de video")
+	}
+}
