@@ -38,6 +38,7 @@ WIBOX_VIDEO_ALL_FRAMES="$(value video_all_frames)"
 WIBOX_OPEN_SETTLE="$(value open_settle)"
 WIBOX_TRICKLE_MS="$(value trickle_ms)"
 WIBOX_LOCK_WAIT="$(value lock_wait)"
+WIBOX_WARM_SECONDS="$(value warm_seconds)"
 WIBOX_FILLER_FILE=/data/filler.h264
 
 for required in WIBOX_ACCOUNT WIBOX_PASSWORD WIBOX_DEVICE_ID WIBOX_UNLOCK_PASSWORD; do
@@ -59,6 +60,9 @@ export WIBOX_UNLOCK_PASSWORD WIBOX_API_TOKEN WIBOX_REMOTE WIBOX_REMOTE_ONLY
 export WIBOX_API_PORT WIBOX_REMOTE_ATTEMPTS WIBOX_AWAKE_POLL WIBOX_VIDEO_WAIT
 export WIBOX_VIDEO_MAX WIBOX_PLAY_RESENDS WIBOX_VIDEO_ALL_FRAMES WIBOX_OPEN_SETTLE
 export WIBOX_TRICKLE_MS WIBOX_LOCK_WAIT WIBOX_FILLER_FILE
+# Ventana caliente del directo: el daemon mantiene un consumo del RTSP para que
+# go2rtc no pare el productor (y con el el tunel) nada mas irse el espectador.
+export WIBOX_WARM_SECONDS
 export WIBOX_HA_URL WIBOX_HA_TOKEN WIBOX_HA_STREAM
 export WIBOX_MPEGTS
 

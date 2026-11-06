@@ -1,5 +1,5 @@
 name: Wibox Doorbell
-version: "0.10.50"
+version: "0.10.52"
 slug: wibox
 description: Opens the Fermax Wi-Box doorbell through the vendor cloud
 url: https://github.com/gnacho/wibox-daemon
@@ -43,6 +43,7 @@ options:
   open_settle: 75
   trickle_ms: 20
   lock_wait: 300
+  warm_seconds: 180
 schema:
   account: str
   password: password
@@ -68,3 +69,4 @@ schema:
   open_settle: int(0,600)
   trickle_ms: int(0,1000)
   lock_wait: int(0,3600)
+  warm_seconds: int(0,3600)

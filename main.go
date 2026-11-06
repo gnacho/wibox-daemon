@@ -18,6 +18,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 )
@@ -72,6 +73,14 @@ type config struct {
 	haURL    string
 	haToken  string
 	haStream string
+	// warmSeconds mantiene el directo caliente ese tiempo despues del ultimo
+	// espectador. 0 lo desactiva (cada apertura monta el tunel de cero).
+	warmSeconds time.Duration
+	// warmAPI y warmRTSP son los extremos locales de go2rtc: de la API se lee
+	// quien esta viendo y por el RTSP se engancha el guardian.
+	warmAPI    string
+	warmRTSP   string
+	warmStream string
 }
 
 func env(key, def string) string {
@@ -105,6 +114,10 @@ func loadConfig() config {
 	if poll < 1 {
 		poll = 3
 	}
+	warmSecs, _ := strconv.Atoi(env("WIBOX_WARM_SECONDS", "0"))
+	if warmSecs < 0 {
+		warmSecs = 0
+	}
 	return config{
 		account:        env("WIBOX_ACCOUNT", ""),
 		password:       env("WIBOX_PASSWORD", ""),
@@ -131,6 +144,10 @@ func loadConfig() config {
 		videoLock:      env("WIBOX_VIDEO_LOCK", ""),
 		remoteBudget:   time.Duration(budget) * time.Second,
 		controlSock:    env("WIBOX_CONTROL_SOCK", ""),
+		warmSeconds:    time.Duration(warmSecs) * time.Second,
+		warmAPI:        env("WIBOX_WARM_API", "http://127.0.0.1:1985"),
+		warmRTSP:       env("WIBOX_WARM_RTSP", "rtsp://127.0.0.1:8556/wibox"),
+		warmStream:     env("WIBOX_WARM_STREAM", "wibox"),
 	}
 }
 
@@ -167,6 +184,9 @@ type daemon struct {
 	// pueda decir si el timbre esta despierto sin preguntar en cada consulta.
 	devicesCache []deviceInfo
 	devicesAt    time.Time
+
+	// warmActive dice si la ventana caliente tiene el guardian enganchado.
+	warmActive atomic.Bool
 }
 
 func (d *daemon) recordOpen(deviceID, via string, rc int, err error) {
@@ -546,6 +566,10 @@ func (d *daemon) routes() http.Handler {
 		if !at.IsZero() {
 			out["cloud_checked"] = at
 		}
+		// Ventana caliente: con el guardian enganchado el tunel sigue montado
+		// aunque no haya nadie mirando, y por eso el timbre esta ocupado.
+		out["warm_seconds"] = int(d.cfg.warmSeconds.Seconds())
+		out["warm_active"] = d.warmActive.Load()
 		d.writeJSON(w, 200, out)
 	})
 	mux.HandleFunc("/devices", func(w http.ResponseWriter, r *http.Request) {
@@ -857,6 +881,29 @@ func main() {
 			go func() { <-camSigs; close(camStop) }()
 			go watchCameraEntry(cfg, time.Minute, camStop)
 		}
+	}
+
+	// Ventana caliente: go2rtc mata el productor en cuanto se queda sin
+	// consumidores y cada apertura vuelve a pagar natcheck y p2pconnect. Un
+	// consumidor propio lo mantiene vivo unos minutos tras el ultimo
+	// espectador, que es lo que hace inmediata la siguiente apertura.
+	if cfg.warmSeconds > 0 {
+		warm := &warmWindow{
+			apiURL:  cfg.warmAPI,
+			stream:  cfg.warmStream,
+			seconds: cfg.warmSeconds,
+			setActive: func(on bool) {
+				d.warmActive.Store(on)
+			},
+			start: func() (warmKeeper, error) {
+				return startFFmpegKeeper(cfg.warmRTSP)
+			},
+		}
+		warmStop := make(chan struct{})
+		warmSigs := make(chan os.Signal, 1)
+		signal.Notify(warmSigs, syscall.SIGINT, syscall.SIGTERM)
+		go func() { <-warmSigs; close(warmStop) }()
+		go warm.run(warmStop)
 	}
 
 	addr := fmt.Sprintf("0.0.0.0:%d", cfg.apiPort)

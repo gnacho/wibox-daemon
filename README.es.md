@@ -90,6 +90,9 @@ Todo por variables de entorno (o un fichero `EnvironmentFile` de systemd):
 | `WIBOX_OPEN_SETTLE` | Segundos que el video espera tras una apertura correcta, porque el timbre mantiene ocupada su unica sesion ese rato (por defecto `75`, `0` lo desactiva) |
 | `WIBOX_TRICKLE_MS` | Ritmo en milisegundos del relleno que mantiene el stream publicado mientras se monta el tunel (por defecto `20`, `0` lo desactiva) |
 | `WIBOX_LOCK_WAIT` | Segundos que un proceso de video nuevo espera al cerrojo de sesion unica en vez de fallar de inmediato (por defecto `300`, `0` falla al momento) |
+| `WIBOX_WARM_SECONDS` | Segundos que el directo sigue caliente tras el ultimo espectador, para que la siguiente apertura se cuelgue del tunel ya montado (por defecto `0`, apagado; el add-on pone `180`) |
+| `WIBOX_WARM_API` | API local de go2rtc que sondea la ventana caliente para contar espectadores (por defecto `http://127.0.0.1:1985`) |
+| `WIBOX_WARM_RTSP` | URL RTSP local a la que se engancha el guardian de la ventana caliente (por defecto `rtsp://127.0.0.1:8556/wibox`) |
 | `WIBOX_VIDEO_RETRY` | Espera base, en segundos, entre reconexiones de video antes de que el backoff doble (por defecto `5`) |
 | `WIBOX_VIDEO_RETRY_MAX` | Techo del backoff de reconexiones de video, en segundos (por defecto `60`) |
 | `WIBOX_VIDEO_START_TIMEOUT` | Segundos que go2rtc espera al productor de video antes de matarlo (por defecto `300`) |
@@ -265,8 +268,8 @@ Opciones: cuenta, contrasena, client id, id del dispositivo, pin de apertura y
 token de la API. Los tiempos se ajustan desde la propia pagina del add-on:
 `attempts`, `awake_poll`, `video_wait`, `video_max`, `play_resends`,
 `cloud_check`, `open_cooldown`, `video_retry`, `video_retry_max`,
-`remote_budget` y `video_start_timeout`. El add-on fuerza la cadena
-remota, asi que no se configura direccion local.
+`remote_budget`, `video_start_timeout` y `warm_seconds`. El add-on fuerza la
+cadena remota, asi que no se configura direccion local.
 
 Desde Home Assistant:
 
@@ -304,9 +307,18 @@ rtsp://<ip-del-haos>:8556/wibox
 ```
 
 Se anade en Home Assistant como camara generica (RTSP) o con la integracion de
-go2rtc. `starttimeout` esta en 600 s porque el timbre duerme y puede tardar
-minutos en responder: mejor abrir la camara bajo demanda que dejarla siempre
-encendida, y la primera imagen tarda cuando nadie ha llamado.
+go2rtc. `starttimeout` sale de la opcion `video_start_timeout` (300 s por
+defecto), porque el timbre duerme y puede tardar minutos en responder.
+
+Con `warm_seconds` (180 por defecto) el directo queda caliente esos segundos
+desde el ultimo espectador: mientras alguien mira, el daemon mantiene un
+consumidor extra sobre el RTSP local y solo lo suelta cuando el stream lleva ese
+rato solo. Una segunda apertura dentro de la ventana se cuelga del tunel que ya
+esta montado, asi que da imagen en torno a un segundo en vez de pagar otra vez
+natcheck, p2pconnect y el primer keyframe. El precio es que durante la ventana
+el timbre mantiene ocupada su unica sesion QUII, de modo que la app del movil y
+los vecinos lo ven ocupado hasta que se suelta. Ponlo a `0` para volver al
+arranque en frio cada vez, o a un numero menor para liberar el timbre antes.
 
 ## Verificar la apertura en el edificio
 
