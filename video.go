@@ -61,7 +61,12 @@ func consumeQuiiPacketsWith(key, buf []byte, onPacket func(*packet)) ([]mediaFra
 const defaultVideoLock = "/tmp/wibox-video.lock"
 
 const (
-	defaultSPSHex = "474d401e99a05825a100000303e800009c4084"
+	// El byte de cabecera va como 0x67 (nal_ref_idc = 3) y no como el 0x47
+	// (nal_ref_idc = 2) que manda el aparato. Los dos son validos en H.264,
+	// pero go2rtc descarta los NAL que empiezan por 0x47: su comprobacion de
+	// AUD de H.265 es b&0x7e == 70 y 0x47 & 0x7e tambien da 70, asi que el
+	// SPS se toma por un AUD y no llega nunca al SDP del RTSP.
+	defaultSPSHex = "674d401e99a05825a100000303e800009c4084"
 	defaultPPSHex = "48ee3c80"
 )
 
