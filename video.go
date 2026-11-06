@@ -497,14 +497,13 @@ func runVideo(cfg config, session string, key []byte, password string, out io.Wr
 						// descarta los PES que solo llevan SPS/PPS, asi que
 						// los nuestros viajan dentro del mismo PES que el
 						// keyframe, y los del aparato se quitan.
-						payload := f.Bitstream
-						if f.KeyFrame {
-							stripped := stripParamSets(f.Bitstream)
-							payload = append(append([]byte(nil), params...), stripped...)
-							if keyFrames < 3 {
-								log.Printf("video: keyframe con parametros propios (%d/%d bytes, primeros % x)",
-									len(payload), len(f.Bitstream), payload[:min(24, len(payload))])
-							}
+						// Los parametros del aparato no son validos y go2rtc
+						// reemite los que haya visto, asi que cada frame sale
+						// con los nuestros delante y sin los suyos.
+						payload := append(append([]byte(nil), params...), stripParamSets(f.Bitstream)...)
+						if videoFrames < 3 {
+							log.Printf("video: frame con parametros propios (%d/%d bytes, primeros % x)",
+								len(payload), len(f.Bitstream), payload[:min(24, len(payload))])
 						}
 						if err := ts.WriteVideo(f.TimestampMS, payload); err != nil {
 							return fmt.Errorf("escribiendo video: %w", err)
