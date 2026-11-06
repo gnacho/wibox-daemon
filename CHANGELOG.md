@@ -3,6 +3,14 @@
 Every release of this project, newest first. The full notes live in the
 release page linked from each entry.
 
+## [v0.10.50](https://github.com/gnacho/wibox-daemon/releases/tag/v0.10.50)
+
+v0.10.50: serve a live frame from the snapshot endpoint
+
+## [v0.10.49](https://github.com/gnacho/wibox-daemon/releases/tag/v0.10.49)
+
+v0.10.49: emit the SPS with nal_ref_idc 3
+
 ## [v0.10.48](https://github.com/gnacho/wibox-daemon/releases/tag/v0.10.48)
 
 v0.10.48: reuse a real keyframe as the filler
