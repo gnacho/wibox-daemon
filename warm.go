@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"sync"
 	"time"
 )
 
@@ -17,6 +18,11 @@ var warmPoll = 2 * time.Second
 // warmRetry es lo que se espera antes de volver a conectar el guardian cuando
 // ffmpeg no arranca. Sin esto, un ffmpeg ausente daria un intento cada sondeo.
 var warmRetry = 30 * time.Second
+
+// warmKeeperRetry es la espera tras un guardian que se cae solo. Sin ella, un
+// nombre de stream equivocado (ffmpeg sale al instante con 404) lo relanzaria
+// cada dos segundos.
+var warmKeeperRetry = 10 * time.Second
 
 // keeperStopTimeout acota lo que se espera al guardian para que cierre su
 // sesion RTSP antes de matarlo.
@@ -49,6 +55,11 @@ type warmWindow struct {
 	// setActive publica en /status si la ventana esta abierta.
 	setActive func(bool)
 	client    *http.Client
+
+	// retry y keeperRetry acortan las esperas en los tests. Cero usa las de
+	// arriba.
+	retry       time.Duration
+	keeperRetry time.Duration
 }
 
 // warmStep es el estado de la ventana entre sondeos.
@@ -92,6 +103,14 @@ func (w *warmWindow) run(stop <-chan struct{}) {
 	if w.client == nil {
 		w.client = &http.Client{Timeout: 3 * time.Second}
 	}
+	retry := w.retry
+	if retry <= 0 {
+		retry = warmRetry
+	}
+	keeperRetry := w.keeperRetry
+	if keeperRetry <= 0 {
+		keeperRetry = warmKeeperRetry
+	}
 
 	var keeper warmKeeper
 	var failures int
@@ -125,6 +144,7 @@ func (w *warmWindow) run(stop <-chan struct{}) {
 			// vuelve a intentar en el siguiente sondeo.
 			keeper = nil
 			st.active = false
+			st.retryAt = time.Now().Add(keeperRetry)
 			w.setActive(false)
 			log.Printf("caliente: el guardian se cerro por su cuenta, se reintenta")
 			continue
@@ -155,7 +175,7 @@ func (w *warmWindow) run(stop <-chan struct{}) {
 			k, kerr := w.start()
 			if kerr != nil {
 				log.Printf("caliente: no se pudo conectar el guardian: %v", kerr)
-				st.retryAt = now.Add(warmRetry)
+				st.retryAt = now.Add(retry)
 				continue
 			}
 			keeper = k
@@ -194,7 +214,7 @@ func (w *warmWindow) viewers() (int, error) {
 type ffmpegKeeper struct {
 	cmd    *exec.Cmd
 	doneCh chan struct{}
-	once   bool
+	once   sync.Once
 }
 
 func startFFmpegKeeper(rtspURL string) (warmKeeper, error) {
@@ -220,20 +240,18 @@ func (k *ffmpegKeeper) done() <-chan struct{} {
 // stop pide a ffmpeg que cierre la sesion (SIGINT, asi go2rtc ve el TEARDOWN) y
 // solo lo mata si no hace caso.
 func (k *ffmpegKeeper) stop() {
-	if k.once {
-		return
-	}
-	k.once = true
-	if k.cmd.Process != nil {
-		_ = k.cmd.Process.Signal(os.Interrupt)
-	}
-	select {
-	case <-k.doneCh:
-	case <-time.After(keeperStopTimeout):
+	k.once.Do(func() {
 		if k.cmd.Process != nil {
-			_ = k.cmd.Process.Kill()
+			_ = k.cmd.Process.Signal(os.Interrupt)
 		}
-	}
+		select {
+		case <-k.doneCh:
+		case <-time.After(keeperStopTimeout):
+			if k.cmd.Process != nil {
+				_ = k.cmd.Process.Kill()
+			}
+		}
+	})
 }
 
 // shouldLogWarmFailure limita los avisos de sondeo: el primero, y luego uno

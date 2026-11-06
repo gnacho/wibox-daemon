@@ -223,6 +223,43 @@ func TestWarmRunAttachesKeepsAndDrops(t *testing.T) {
 	close(stop)
 }
 
+// failedKeeper simula un ffmpeg que sale al instante (stream mal nombrado).
+type failedKeeper struct{ quit chan struct{} }
+
+func (f *failedKeeper) stop()                 {}
+func (f *failedKeeper) done() <-chan struct{} { return f.quit }
+
+func TestWarmRunWaitsAfterAKeeperThatDiesOnItsOwn(t *testing.T) {
+	s := newStreamsServer(t, 1)
+	var starts atomic.Int64
+	w := &warmWindow{
+		apiURL: s.srv.URL, stream: "wibox", seconds: time.Minute, poll: 2 * time.Millisecond,
+		keeperRetry: 20 * time.Millisecond,
+		client:      s.srv.Client(),
+		setActive:   func(bool) {},
+	}
+	w.start = func() (warmKeeper, error) {
+		starts.Add(1)
+		k := &failedKeeper{quit: make(chan struct{})}
+		close(k.quit)
+		return k, nil
+	}
+	stop := make(chan struct{})
+	go w.run(stop)
+	time.Sleep(100 * time.Millisecond)
+	close(stop)
+
+	got := starts.Load()
+	if got < 2 {
+		t.Fatalf("deberia reintentar tras la caida, hubo %d intentos", got)
+	}
+	// Con dos milisegundos de sondeo y veinte de espera no puede haber decenas
+	// de intentos: seria un bucle de ffmpeg.
+	if got > 8 {
+		t.Fatalf("demasiados intentos (%d): el reintento no espera", got)
+	}
+}
+
 func TestWarmRunDoesNothingWhenDisabled(t *testing.T) {
 	var hits atomic.Int64
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
