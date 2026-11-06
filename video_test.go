@@ -7,26 +7,28 @@ import (
 )
 
 // quiiMediaPacket arma un paquete QUII de media tal como lo manda el timbre:
-// cabecera de 32 bytes cifrada y cuerpo de media en claro.
+// cabecera de 32 bytes cifrada y cuerpo con solo el prefijo cifrado. El resto
+// del cpacket (bitstream H264 incluido) viaja en claro.
 func quiiMediaPacket(t *testing.T, key []byte, media []byte) []byte {
 	t.Helper()
 	h := make([]byte, 32)
 	h[0] = 0xA1 // tipo de media
-	binary.LittleEndian.PutUint16(h[9:], 0)
-	// El cuerpo va cifrado en bloques de 16 y la cabecera anuncia el tamano
-	// real, que incluye hasta 15 bytes de cola fuera de bloque (el timbre real
-	// anuncia 180 para 176 cifrados). Se replica ese caso.
-	body := zeroPad(media)
-	enc, err := aesCBC(key, body, true)
-	if err != nil {
-		t.Fatalf("cifrando cuerpo: %v", err)
+	prefix := 32
+	if len(media) < prefix {
+		prefix = len(media) - len(media)%16
 	}
-	binary.LittleEndian.PutUint32(h[11:], uint32(len(enc)+4))
+	binary.LittleEndian.PutUint16(h[9:], uint16(prefix))
+	enc, err := aesCBC(key, zeroPad(media[:prefix]), true)
+	if err != nil {
+		t.Fatalf("cifrando prefijo del cuerpo: %v", err)
+	}
+	body := append(enc, media[prefix:]...)
+	binary.LittleEndian.PutUint32(h[11:], uint32(len(body)))
 	encH, err := aesCBC(key, h, true)
 	if err != nil {
 		t.Fatalf("cifrando cabecera: %v", err)
 	}
-	return append(append(encH, enc...), 0, 0, 0, 0)
+	return append(encH, body...)
 }
 
 func TestConsumeQuiiPacketsReturnsFrames(t *testing.T) {

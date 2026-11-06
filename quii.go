@@ -327,19 +327,25 @@ func decodeQuiiPacket(key, data []byte) (*packet, int, error) {
 	total := 32 + size
 
 	if isMedia {
-		// El cuerpo va cifrado en bloques de 16 pero la cabecera anuncia el
-		// tamano sin relleno (180 en el timbre real), asi que se descifra el
-		// multiplo de 16 hacia abajo y los 4 bytes de cola se descartan. El
-		// resultado es un cpacket, que es lo que espera el demuxer.
-		aligned := size - size%16
-		if aligned == 0 {
-			return nil, 0, fmt.Errorf("cuerpo de media sin bloques: %d", size)
+		// Del cuerpo solo va cifrado el prefijo que anuncia cmdSize (32 bytes
+		// en el timbre real), que cubre la cabecera del cpacket y los primeros
+		// bytes del bitstream. El resto del cpacket, H264 incluido, viaja en
+		// claro. Descifrar el cuerpo entero convertia el video en ruido.
+		prefix := cmdSize
+		if prefix > size {
+			prefix = size
 		}
-		dec, derr := aesCBC(key, body[:aligned], false)
-		if derr != nil {
-			return nil, 0, derr
+		aligned := prefix - prefix%16
+		media := make([]byte, 0, size)
+		if aligned > 0 {
+			dec, derr := aesCBC(key, body[:aligned], false)
+			if derr != nil {
+				return nil, 0, derr
+			}
+			media = append(media, dec...)
 		}
-		p.Media = dec
+		media = append(media, body[prefix:]...)
+		p.Media = media
 		p.RawSize = size
 		return p, total, nil
 	}
