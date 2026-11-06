@@ -3,6 +3,42 @@
 Every release of this project, newest first. The full notes live in the
 release page linked from each entry.
 
+## [v0.10.48](https://github.com/gnacho/wibox-daemon/releases/tag/v0.10.48)
+
+v0.10.48: reuse a real keyframe as the filler
+
+## [v0.10.47](https://github.com/gnacho/wibox-daemon/releases/tag/v0.10.47)
+
+v0.10.47: restore the filler keyframe
+
+## [v0.10.46](https://github.com/gnacho/wibox-daemon/releases/tag/v0.10.46)
+
+v0.10.46: the filler carries only the parameters
+
+## [v0.10.45](https://github.com/gnacho/wibox-daemon/releases/tag/v0.10.45)
+
+v0.10.45: drop the filler video frame
+
+## [v0.10.44](https://github.com/gnacho/wibox-daemon/releases/tag/v0.10.44)
+
+v0.10.44: our parameters before every frame
+
+## [v0.10.43](https://github.com/gnacho/wibox-daemon/releases/tag/v0.10.43)
+
+v0.10.43: log the first keyframes
+
+## [v0.10.42](https://github.com/gnacho/wibox-daemon/releases/tag/v0.10.42)
+
+v0.10.42: our SPS and PPS inside the keyframe packet
+
+## [v0.10.41](https://github.com/gnacho/wibox-daemon/releases/tag/v0.10.41)
+
+v0.10.41: repeat the SPS and PPS with every keyframe
+
+## [v0.10.40](https://github.com/gnacho/wibox-daemon/releases/tag/v0.10.40)
+
+v0.10.40: decrypt only the encrypted media prefix
+
 ## [v0.10.39](https://github.com/gnacho/wibox-daemon/releases/tag/v0.10.39)
 
 v0.10.39: normalise the timestamps
