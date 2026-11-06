@@ -125,29 +125,39 @@ There are two ways to create the entry, and the daemon tries both:
 
 The `advanced` block is mandatory in both cases, even without a stream.
 
-## Live view takes a while to start
+## Live view starts in a few seconds
 
 Measured against the add-on with the doorbell asleep: `ffprobe` of
-`rtsp://<host>:8556/wibox` prints the tracks (`h264`, `pcm_alaw`) but only after
-**about 32 seconds**, and it returns nothing at all within 8 seconds.
+`rtsp://<host>:8556/wibox` prints both tracks (`h264` and `pcm_alaw`) in **about
+four seconds**, three runs in a row. Before 0.10.36 the same command took about
+32 seconds, and a second viewer right after the first got nothing at all within
+15 seconds.
 
-The daemon is not the cause. Run inside the container, the producer writes its
-first packet within two seconds even with no tunnel open:
+Two things were in the way.
 
-```
-timeout 8 /usr/bin/wibox-daemon -video -video-audio > /tmp/h.ts
-bytes a 2s: 564   # PAT, PMT and the SPS/PPS
-```
+**go2rtc publishes a stream only once its demuxer has seen media.** The daemon
+wrote the MPEG-TS header and a single silence frame, then went quiet for the
+tens of seconds the p2pconnect takes with the bell asleep. A trickle of G711A
+silence was not enough either: measured inside the container the pipe carried
+about 9 KB per second and `DESCRIBE` still hung. What it needs is a video frame,
+so during the wait the daemon sends a 99-byte gray IDR with its own SPS and PPS
+every 100 ms. That is why the first picture is gray and not black: there is no
+real frame to show until the bell wakes.
 
-What happens is that go2rtc does not publish the stream until its MPEG-TS
-demuxer has real media from the source, and the source only gets media once the
-tunnel with the doorbell is up (which needs a waking window). Until then
-`/api/streams` shows the producer running and no consumers, and the RTSP
-`DESCRIBE` waits.
+**go2rtc spawns one producer per viewer,** and every producer takes the same
+`video.lock`, because the bell only accepts one session. When the previous
+producer had not released it yet, the new one failed at once and wrote nothing,
+so the consumer had no tracks. Now the producer writes its header and starts the
+filler, then waits for the lock (up to `WIBOX_LOCK_WAIT` seconds, 300 by
+default) instead of giving up, and stops the filler the moment the tunnel is up.
 
-That is also why Home Assistant's camera flow used to time out: it validates by
-opening the stream and gives up in seconds. See "The camera entry creates
-itself" for how the entry is created anyway.
+| Variable | Meaning |
+|---|---|
+| `WIBOX_TRICKLE_MS` | Pace of the filler in milliseconds (default `20`, which is one 20 ms G711A frame, `0` disables it) |
+| `WIBOX_LOCK_WAIT` | Seconds to wait for the video lock before failing (default `300`, `0` fails immediately, as before) |
+
+The filler only runs while the tunnel is being established, so real frames are
+never mixed with the gray one.
 
 ## Frames before the first keyframe
 

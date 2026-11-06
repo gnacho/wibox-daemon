@@ -88,6 +88,8 @@ Todo por variables de entorno (o un fichero `EnvironmentFile` de systemd):
 | `WIBOX_VIDEO_LOCK` | Cerrojo que impide un segundo proceso de video sobre el timbre (por defecto `/tmp/wibox-video.lock`) |
 | `WIBOX_OPEN_COOLDOWN` | Segundos en los que se ignora otra apertura tras una correcta (por defecto `3`, `0` lo desactiva) |
 | `WIBOX_OPEN_SETTLE` | Segundos que el video espera tras una apertura correcta, porque el timbre mantiene ocupada su unica sesion ese rato (por defecto `75`, `0` lo desactiva) |
+| `WIBOX_TRICKLE_MS` | Ritmo en milisegundos del relleno que mantiene el stream publicado mientras se monta el tunel (por defecto `20`, `0` lo desactiva) |
+| `WIBOX_LOCK_WAIT` | Segundos que un proceso de video nuevo espera al cerrojo de sesion unica en vez de fallar de inmediato (por defecto `300`, `0` falla al momento) |
 | `WIBOX_VIDEO_RETRY` | Espera base, en segundos, entre reconexiones de video antes de que el backoff doble (por defecto `5`) |
 | `WIBOX_VIDEO_RETRY_MAX` | Techo del backoff de reconexiones de video, en segundos (por defecto `60`) |
 | `WIBOX_VIDEO_START_TIMEOUT` | Segundos que go2rtc espera al productor de video antes de matarlo (por defecto `300`) |
