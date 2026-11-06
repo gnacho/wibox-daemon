@@ -73,6 +73,26 @@ caller cannot afford that, add `&wait=0`: the daemon answers `503` at once when
 the last cloud check saw the bell offline. A second opening within
 `WIBOX_OPEN_COOLDOWN` seconds receives `429` with `retry_after_s`.
 
+## When the cloud session goes stale
+
+The provider keeps the session in two duplex HTTP connections. They can die
+without saying anything, and from then on every call waits out its timeout.
+Measured on the add-on after five hours up: `/status` reported
+`cloud_ok: false` with `timeout esperando "get-device-list"` and `/open`
+answered `{"error":"timeout esperando \"get-device-token\"","rc":-1}`, while the
+same credentials worked from a fresh process and the container reached the
+vendor host without a problem. The network was fine, the session was not.
+
+The device list, the device token and the periodic check now renew the session
+and retry once when the error looks like a dead connection (timeout, EOF,
+session, expired, closed). If the renewal fails, the original error is returned
+so a real problem is not disguised as a login failure. Nothing is renewed on
+errors that mean something else, such as a rejected command.
+
+A failed opening leaves no `<video.lock>.lastopen` marker either, so it does not
+delay the next view. If a whole process looks stuck, restart the add-on: on
+start it logs in again.
+
 ## Watching right after opening
 
 The bell accepts one session at a time, and an opening keeps it busy for a

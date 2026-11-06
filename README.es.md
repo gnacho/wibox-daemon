@@ -144,6 +144,12 @@ que se construyo, que es la forma mas rapida de saber que corre un despliegue.
 Dentro del add-on esta misma comprobacion se puede programar con la opcion
 `cloud_check` (segundos, por defecto 600) y su resultado aparece en `/status`.
 
+La sesion vive en dos conexiones duplex que pueden morir sin dar error, y
+entonces cada llamada espera hasta agotar su plazo. Cuando pasa, `/status`
+muestra `cloud_ok: false` con un `timeout` en `cloud_error` y `/open` devuelve
+`rc: -1`. El daemon renueva la sesion y reintenta una vez ante ese tipo de
+error, y reiniciar el add-on tambien lo arregla.
+
 ## API
 
 ```

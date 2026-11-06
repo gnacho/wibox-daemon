@@ -146,6 +146,12 @@ check whether the credentials are still valid.
 `./wibox-daemon -version` prints the build version and the platform it was
 compiled for, which is the fastest way to know what a deployment is running.
 
+The session lives in two duplex connections that can die without an error, and
+then every call waits out its timeout. When it happens, `/status` shows
+`cloud_ok: false` with a `timeout` in `cloud_error` and `/open` returns
+`rc: -1`. The daemon renews the session and retries once on that kind of error,
+and restarting the add-on also fixes it.
+
 ## API
 
 ```
