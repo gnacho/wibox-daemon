@@ -499,7 +499,12 @@ func runVideo(cfg config, session string, key []byte, password string, out io.Wr
 						// keyframe, y los del aparato se quitan.
 						payload := f.Bitstream
 						if f.KeyFrame {
-							payload = append(append([]byte(nil), params...), stripParamSets(f.Bitstream)...)
+							stripped := stripParamSets(f.Bitstream)
+							payload = append(append([]byte(nil), params...), stripped...)
+							if keyFrames < 3 {
+								log.Printf("video: keyframe con parametros propios (%d/%d bytes, primeros % x)",
+									len(payload), len(f.Bitstream), payload[:min(24, len(payload))])
+							}
 						}
 						if err := ts.WriteVideo(f.TimestampMS, payload); err != nil {
 							return fmt.Errorf("escribiendo video: %w", err)
