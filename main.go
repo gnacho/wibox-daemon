@@ -485,11 +485,15 @@ func (d *daemon) routes() http.Handler {
 	})
 	// Home Assistant pide una imagen fija para la camara y no acepta el JSON
 	// del health: sin una imagen de verdad el config flow responde
-	// invalid_still_image. Se sirve un JPEG de relleno mientras el timbre no
-	// mande imagen de verdad.
+	// invalid_still_image. Se pide un fotograma al vuelo a go2rtc y, si no lo
+	// hay (tunel sin montar, ffmpeg ausente), se sirve el relleno.
 	mux.HandleFunc("/snapshot.jpg", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "image/jpeg")
 		w.Header().Set("Cache-Control", "no-store")
+		if frame := liveSnapshot(); len(frame) > 0 {
+			w.Write(frame)
+			return
+		}
 		w.Write(placeholderJPEG())
 	})
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
@@ -905,6 +909,30 @@ func orNone(v string) string {
 		return "no configurada y la via remota esta desactivada"
 	}
 	return v
+}
+
+// liveSnapshot pide a go2rtc un fotograma del directo y lo devuelve tal cual.
+// Devuelve nil cuando no hay imagen que dar: el tunel con el timbre tarda en
+// montarse y go2rtc necesita ffmpeg para sacar el JPEG del stream.
+func liveSnapshot() []byte {
+	url := os.Getenv("WIBOX_SNAPSHOT_URL")
+	if url == "" {
+		url = "http://127.0.0.1:1985/api/frame.jpeg?src=wibox"
+	}
+	client := &http.Client{Timeout: 8 * time.Second}
+	resp, err := client.Get(url)
+	if err != nil {
+		return nil
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil
+	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
+	if err != nil || len(body) < 2 || body[0] != 0xFF || body[1] != 0xD8 {
+		return nil
+	}
+	return body
 }
 
 // placeholderJPEG dibuja un JPEG sencillo para la imagen fija de la camara:
