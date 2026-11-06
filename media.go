@@ -185,6 +185,43 @@ func countNALTypes(b []byte, acc map[int]int) {
 	}
 }
 
+// stripParamSets devuelve el bitstream sin los NAL de SPS (7) y PPS (8): el
+// muxer antepone los suyos, que son los que la app del timbre usa.
+func stripParamSets(b []byte) []byte {
+	out := make([]byte, 0, len(b))
+	i := 0
+	for i < len(b) {
+		start := -1
+		startLen := 0
+		if i+3 <= len(b) && b[i] == 0 && b[i+1] == 0 && b[i+2] == 1 {
+			start, startLen = i, 3
+		} else if i+4 <= len(b) && b[i] == 0 && b[i+1] == 0 && b[i+2] == 0 && b[i+3] == 1 {
+			start, startLen = i, 4
+		}
+		if start < 0 {
+			i++
+			continue
+		}
+		nal := i + startLen
+		if nal >= len(b) {
+			break
+		}
+		kind := b[nal] & 0x1F
+		next := len(b)
+		for j := nal + 1; j+3 <= len(b); j++ {
+			if b[j] == 0 && b[j+1] == 0 && (b[j+2] == 1 || (b[j+2] == 0 && j+4 <= len(b) && b[j+3] == 1)) {
+				next = j
+				break
+			}
+		}
+		if kind != 7 && kind != 8 {
+			out = append(out, b[start:next]...)
+		}
+		i = next
+	}
+	return out
+}
+
 func containsIDR(b []byte) bool {
 	for i := 0; i+4 <= len(b); i++ {
 		if b[i] != 0 || b[i+1] != 0 {

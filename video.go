@@ -155,8 +155,8 @@ func runVideo(cfg config, session string, key []byte, password string, out io.Wr
 	// el MPEG-TS anuncia asi una pista H.264 valida desde el principio y la
 	// validacion del config flow de Home Assistant no depende de un IDR.
 	paramsWritten := false
-	writeParams := func(ptsMS int64, force bool) error {
-		if paramsWritten && !force {
+	writeParams := func(ptsMS int64) error {
+		if paramsWritten {
 			return nil
 		}
 		paramsWritten = true
@@ -170,7 +170,7 @@ func runVideo(cfg config, session string, key []byte, password string, out io.Wr
 	// alguien mira y quien valida el stream (el config flow de Home Assistant)
 	// se rinde en segundos, mucho antes de que el tunel con el timbre este
 	// montado.
-	if err := writeParams(0, false); err != nil {
+	if err := writeParams(0); err != nil {
 		return fmt.Errorf("escribiendo cabecera del stream: %w", err)
 	}
 	// go2rtc sondea el pipe esperando un paquete de cada tipo que anuncie el
@@ -433,7 +433,7 @@ func runVideo(cfg config, session string, key []byte, password string, out io.Wr
 				}
 			})
 			for _, f := range frames {
-				if perr := writeParams(f.TimestampMS, f.KeyFrame); perr != nil {
+				if perr := writeParams(f.TimestampMS); perr != nil {
 					return fmt.Errorf("escribiendo SPS/PPS: %w", perr)
 				}
 				// El audio no depende de un keyframe: se emite desde el
@@ -493,7 +493,15 @@ func runVideo(cfg config, session string, key []byte, password string, out io.Wr
 						log.Printf("video: primer keyframe tras %d frames saltados", skipped)
 					}
 					if ts != nil {
-						if err := ts.WriteVideo(f.TimestampMS, f.Bitstream); err != nil {
+						// Los parametros del aparato no son validos y go2rtc
+						// descarta los PES que solo llevan SPS/PPS, asi que
+						// los nuestros viajan dentro del mismo PES que el
+						// keyframe, y los del aparato se quitan.
+						payload := f.Bitstream
+						if f.KeyFrame {
+							payload = append(append([]byte(nil), params...), stripParamSets(f.Bitstream)...)
+						}
+						if err := ts.WriteVideo(f.TimestampMS, payload); err != nil {
 							return fmt.Errorf("escribiendo video: %w", err)
 						}
 					} else if _, err := out.Write(f.Bitstream); err != nil {
