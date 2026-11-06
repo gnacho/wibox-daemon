@@ -218,8 +218,14 @@ Despues se anade a Home Assistant como camara generica apuntando a
   es lo que usa el add-on: go2rtc mapea `0x90` a su codec PCMA. Sin el flag
   `-video-audio` escribe el audio por stderr y haria falta una segunda fuente
   `ffmpeg`, porque go2rtc trata dos fuentes `exec:` como failover y no las mezcla.
-  Ojo: `ffprobe` no reconoce A-law dentro de MPEG-TS (el propio ffmpeg lo escribe
-  como stream type `0x06`), asi que no sirve como gate de esa pista.
+  El sonido si llega al espectador desde 0.10.38 y 0.10.39: `ffprobe` contra el
+  RTSP del add-on imprime `pcm_alaw` en la segunda pista, y decodificarlo da
+  640.036 muestras de audio no silencioso (el daemon registra `audio=3998`, unos
+  cincuenta frames de 20 ms por segundo). Un detalle para depurar capturas: este
+  muxer declara el A-law como stream type `0x90`, mientras que la PMT que sirve
+  go2rtc reescribe esa pista como `0x06`, asi que una captura tomada en el lado
+  del RTSP ensena un tipo distinto del que se escribe aqui, y los dos describen
+  el mismo audio PCMA.
 
 ## Camara en Home Assistant
 
