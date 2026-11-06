@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/base64"
 	"log"
+	"os"
 
 	"strconv"
 	"sync"
@@ -42,10 +43,40 @@ func trickleInterval() time.Duration {
 // Solo se usa en la ventana previa a los frames reales: quien la llama tiene
 // que pararla antes de empezar a escribir video, porque el muxer no esta
 // preparado para dos escritores a la vez.
+// fillerFrame devuelve el frame de relleno: si hay uno real guardado de una
+// sesion anterior (con los parametros del timbre) se usa ese, porque go2rtc se
+// queda con los parametros del primer keyframe que ve y los reinyecta. El IDR
+// de x264 que se usaba antes traia otros parametros y dejaba el video real sin
+// poder decodificar.
+func fillerFrame() []byte {
+	path := os.Getenv("WIBOX_FILLER_FILE")
+	if path == "" {
+		return fakeFrame
+	}
+	b, err := os.ReadFile(path)
+	if err != nil || len(b) < 64 {
+		return fakeFrame
+	}
+	return b
+}
+
+// saveFiller guarda un keyframe real con nuestros parametros para usarlo como
+// relleno en la siguiente sesion.
+func saveFiller(payload []byte) {
+	path := os.Getenv("WIBOX_FILLER_FILE")
+	if path == "" || len(payload) < 64 {
+		return
+	}
+	if err := os.WriteFile(path, payload, 0o600); err != nil {
+		log.Printf("video: no se pudo guardar el relleno en %s: %v", path, err)
+	}
+}
+
 func startAudioTrickle(ts *tsMuxer, every time.Duration) (stop func()) {
 	if ts == nil || every <= 0 {
 		return func() {}
 	}
+	filler := fillerFrame()
 	done := make(chan struct{})
 	var once sync.Once
 	var wg sync.WaitGroup
@@ -70,7 +101,7 @@ func startAudioTrickle(ts *tsMuxer, every time.Duration) (stop func()) {
 				// no son los del timbre y go2rtc se queda con ellos como si
 				// fueran del stream, con lo que el video real no decodifica.
 				if ticks%5 == 0 {
-					if err := ts.WriteVideo(ptsMS, fakeFrame); err != nil {
+					if err := ts.WriteVideo(ptsMS, filler); err != nil {
 						return
 					}
 				}

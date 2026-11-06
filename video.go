@@ -155,6 +155,7 @@ func runVideo(cfg config, session string, key []byte, password string, out io.Wr
 	// el MPEG-TS anuncia asi una pista H.264 valida desde el principio y la
 	// validacion del config flow de Home Assistant no depende de un IDR.
 	paramsWritten := false
+	fillerSaved := false
 	writeParams := func(ptsMS int64) error {
 		if paramsWritten {
 			return nil
@@ -507,6 +508,10 @@ func runVideo(cfg config, session string, key []byte, password string, out io.Wr
 						}
 						if err := ts.WriteVideo(f.TimestampMS, payload); err != nil {
 							return fmt.Errorf("escribiendo video: %w", err)
+						}
+						if f.KeyFrame && !fillerSaved {
+							fillerSaved = true
+							saveFiller(payload)
 						}
 					} else if _, err := out.Write(f.Bitstream); err != nil {
 						return fmt.Errorf("escribiendo video: %w", err)
