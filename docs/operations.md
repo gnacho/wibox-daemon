@@ -173,8 +173,8 @@ default) instead of giving up, and stops the filler the moment the tunnel is up.
 
 | Variable | Meaning |
 |---|---|
-| `WIBOX_TRICKLE_MS` | Pace of the filler in milliseconds (default `20`, which is one 20 ms G711A frame, `0` disables it) |
-| `WIBOX_LOCK_WAIT` | Seconds to wait for the video lock before failing (default `300`, `0` fails immediately, as before) |
+| `WIBOX_TRICKLE_MS` | Pace of the filler in milliseconds (default `20`, which is one 20 ms G711A frame, `0` disables it). Add-on option `trickle_ms` |
+| `WIBOX_LOCK_WAIT` | Seconds to wait for the video lock before failing (default `300`, `0` fails immediately, as before). Add-on option `lock_wait` |
 
 The filler only runs while the tunnel is being established, so real frames are
 never mixed with the gray one.

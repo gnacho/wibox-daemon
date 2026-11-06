@@ -3,6 +3,70 @@
 Every release of this project, newest first. The full notes live in the
 release page linked from each entry.
 
+## [v0.10.39](https://github.com/gnacho/wibox-daemon/releases/tag/v0.10.39)
+
+v0.10.39: normalise the timestamps
+
+## [v0.10.38](https://github.com/gnacho/wibox-daemon/releases/tag/v0.10.38)
+
+v0.10.38: mux the audio
+
+## [v0.10.37](https://github.com/gnacho/wibox-daemon/releases/tag/v0.10.37)
+
+v0.10.37: renew the cloud session
+
+## [v0.10.36](https://github.com/gnacho/wibox-daemon/releases/tag/v0.10.36)
+
+v0.10.36: wait for the lock
+
+## [v0.10.35](https://github.com/gnacho/wibox-daemon/releases/tag/v0.10.35)
+
+v0.10.35: feed the video track
+
+## [v0.10.34](https://github.com/gnacho/wibox-daemon/releases/tag/v0.10.34)
+
+v0.10.34: keep the stream fed
+
+## [v0.10.33](https://github.com/gnacho/wibox-daemon/releases/tag/v0.10.33)
+
+v0.10.33: only a successful open keeps the bell busy
+
+## [v0.10.32](https://github.com/gnacho/wibox-daemon/releases/tag/v0.10.32)
+
+v0.10.32: let the bell release an open
+
+## [v0.10.31](https://github.com/gnacho/wibox-daemon/releases/tag/v0.10.31)
+
+v0.10.31: forward frames before the keyframe
+
+## [v0.10.30](https://github.com/gnacho/wibox-daemon/releases/tag/v0.10.30)
+
+v0.10.30: audio frame in the opening header
+
+## [v0.10.29](https://github.com/gnacho/wibox-daemon/releases/tag/v0.10.29)
+
+v0.10.29: camera entry without a stream
+
+## [v0.10.28](https://github.com/gnacho/wibox-daemon/releases/tag/v0.10.28)
+
+v0.10.28: stream header before dialling
+
+## [v0.10.27](https://github.com/gnacho/wibox-daemon/releases/tag/v0.10.27)
+
+v0.10.27: snapshot and immediate stream header
+
+## [v0.10.26](https://github.com/gnacho/wibox-daemon/releases/tag/v0.10.26)
+
+v0.10.26: announce the video track early
+
+## [v0.10.25](https://github.com/gnacho/wibox-daemon/releases/tag/v0.10.25)
+
+v0.10.25: export the home assistant variables
+
+## [v0.10.24](https://github.com/gnacho/wibox-daemon/releases/tag/v0.10.24)
+
+v0.10.24: create the camera entry automatically
+
 ## [v0.10.23](https://github.com/gnacho/wibox-daemon/releases/tag/v0.10.23)
 
 v0.10.23: name the process holding the video lock
