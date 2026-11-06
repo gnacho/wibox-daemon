@@ -179,6 +179,45 @@ default) instead of giving up, and stops the filler the moment the tunnel is up.
 The filler only runs while the tunnel is being established, so real frames are
 never mixed with the gray one.
 
+## The live view stays warm after the last viewer
+
+go2rtc stops the `exec:` producer the moment the last viewer disconnects, so
+every opening pays the full cold start again: login, discovery, natcheck (12 to
+20 seconds measured) and p2pconnect (up to 36 seconds with the bell asleep),
+plus the wait for a keyframe.
+
+`WIBOX_WARM_SECONDS` keeps the live view warm that long (180 in the add-on,
+`0` restores the cold start). The daemon watches the local go2rtc API
+(`/api/streams`): when the stream has a viewer it attaches one consumer of its
+own (an `ffmpeg` that copies the RTSP to nowhere) and keeps it while somebody
+watches, then drops it once the stream has been alone for the configured
+seconds. While that consumer is attached the producer and its tunnel stay up,
+so the next opening joins the session that is already established.
+
+Measured with go2rtc 1.9.15 and a local stream: the second viewer gets the
+tracks in **283 ms** and go2rtc spawns **no second producer** (the producer log
+shows a single start when the guardian attaches and none afterwards).
+
+The cost is real and it was the accepted trade-off: the doorbell only accepts
+one QUII session, so while the window is open the phone app and the neighbours
+see the doorbell as busy. Set the option to `0` to release it as soon as the
+last viewer leaves.
+
+Note on `#killtimeout`: it does **not** provide this window. In go2rtc it is
+the `exec.Cmd.WaitDelay`, so it only delays the SIGKILL of an orphan process,
+and go2rtc has already dropped the producer and spawns a fresh one for the next
+viewer. A warm tunnel needs a live consumer, which is what this option does.
+
+| Variable | Meaning |
+|---|---|
+| `WIBOX_WARM_SECONDS` | Seconds the live view stays warm after the last viewer (default `0`, off; add-on option `warm_seconds`, `180`) |
+| `WIBOX_WARM_API` | Local go2rtc API used to count viewers (default `http://127.0.0.1:1985`) |
+| `WIBOX_WARM_RTSP` | Local RTSP URL the guardian attaches to (default `rtsp://127.0.0.1:8556/wibox`) |
+| `WIBOX_WARM_STREAM` | Name of the go2rtc stream to watch (default `wibox`) |
+
+`/status` reports `warm_seconds` and `warm_active`, so an automation can tell
+whether the doorbell is being kept busy on purpose.
+
 ## Frames before the first keyframe
 
 By default every video frame before the first keyframe is discarded, because a

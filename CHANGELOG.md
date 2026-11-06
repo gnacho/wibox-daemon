@@ -3,6 +3,10 @@
 Every release of this project, newest first. The full notes live in the
 release page linked from each entry.
 
+## [v0.10.51](https://github.com/gnacho/wibox-daemon/releases/tag/v0.10.51)
+
+v0.10.51: keep the live view warm after the last viewer
+
 ## [v0.10.50](https://github.com/gnacho/wibox-daemon/releases/tag/v0.10.50)
 
 v0.10.50: serve a live frame from the snapshot endpoint

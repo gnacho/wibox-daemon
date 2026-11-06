@@ -92,6 +92,9 @@ Everything through environment variables (or a systemd `EnvironmentFile`):
 | `WIBOX_OPEN_SETTLE` | Seconds the video waits after a successful opening, because the bell keeps the single session busy that long (default `75`, `0` disables it) |
 | `WIBOX_TRICKLE_MS` | Pace in milliseconds of the filler that keeps the stream published while the tunnel is being established (default `20`, `0` disables it) |
 | `WIBOX_LOCK_WAIT` | Seconds a new video process waits for the single-session lock instead of failing at once (default `300`, `0` fails immediately) |
+| `WIBOX_WARM_SECONDS` | Seconds the live view stays warm after the last viewer, so the next opening joins the tunnel already established (default `0`, off; the add-on sets `180`) |
+| `WIBOX_WARM_API` | Local go2rtc API the warm window polls to count viewers (default `http://127.0.0.1:1985`) |
+| `WIBOX_WARM_RTSP` | Local RTSP URL the warm guardian attaches to (default `rtsp://127.0.0.1:8556/wibox`) |
 | `WIBOX_VIDEO_RETRY` | Base wait, in seconds, between video reconnects before the backoff doubles (default `5`) |
 | `WIBOX_VIDEO_RETRY_MAX` | Ceiling of the video reconnect backoff, in seconds (default `60`) |
 | `WIBOX_VIDEO_START_TIMEOUT` | Seconds go2rtc waits for the video producer before killing it (default `300`) |
@@ -266,8 +269,8 @@ install "Wibox Doorbell"
 Options, all of them adjustable from the add-on page: account, password,
 client id, device id, opening pin and API token; `attempts`, `awake_poll`,
 `video_wait`, `video_max`, `play_resends`, `cloud_check`, `open_cooldown`,
-`video_retry`, `video_retry_max`, `remote_budget` and `video_start_timeout` for
-the timings. The add-on forces the remote chain, so no LAN
+`video_retry`, `video_retry_max`, `remote_budget`, `video_start_timeout` and
+`warm_seconds` for the timings. The add-on forces the remote chain, so no LAN
 address is configured.
 
 From Home Assistant:
@@ -306,9 +309,18 @@ rtsp://<haos-ip>:8556/wibox
 ```
 
 Add it in Home Assistant as a generic camera (RTSP) or through the go2rtc
-integration. `starttimeout` is set to 600 s because the doorbell sleeps and may
-take minutes to answer: open the camera on demand rather than leaving it
-always-on, and expect the first image to be slow when nobody has rung.
+integration. `starttimeout` comes from the `video_start_timeout` option (300 s
+by default) because the doorbell sleeps and may take minutes to answer.
+
+With `warm_seconds` (180 by default) the live view stays warm for that many
+seconds after the last viewer: while somebody watches, the daemon keeps one
+extra consumer on the local RTSP, and it drops it only once the stream has been
+alone for that long. A second opening inside the window joins the tunnel that is
+already up, so it shows a picture in about a second instead of paying natcheck,
+p2pconnect and the first keyframe again. The price is that the doorbell keeps
+its single QUII session during the window, so the phone app and the neighbours
+see it busy until it is released. Set it to `0` to go back to a cold start every
+time, or to a smaller number to free the doorbell sooner.
 
 ## Verifying the door opening in the building
 
