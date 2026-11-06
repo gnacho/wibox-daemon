@@ -169,6 +169,12 @@ func runVideo(cfg config, session string, key []byte, password string, out io.Wr
 			return fmt.Errorf("escribiendo el silencio inicial: %w", err)
 		}
 	}
+	// Un solo frame de silencio no basta: go2rtc no publica el stream hasta
+	// que el demuxer lleva un rato recibiendo media. Con el timbre dormido el
+	// tunel tarda decenas de segundos, asi que durante esa espera se mantiene
+	// un goteo de silencio y se corta justo antes de escribir frames reales.
+	stopTrickle := startAudioTrickle(ts, trickleInterval())
+	defer stopTrickle()
 
 	// Si la API acaba de abrir, el timbre todavia tiene esa sesion y no deja
 	// montar otra: esperar aqui es mas barato que gastar el presupuesto remoto
@@ -179,6 +185,7 @@ func runVideo(cfg config, session string, key []byte, password string, out io.Wr
 	if err != nil {
 		return err
 	}
+	stopTrickle()
 	defer s.close()
 
 	t := newRbTunnel(s.conn, s.probe.peer, s.sessionFlag, key, password, cfg.channel, cfg.stream)
